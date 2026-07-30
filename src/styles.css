@@ -1565,6 +1565,78 @@ input[type='range'] {
 .callHead span {
   flex: 1;
 }
+/* ── tienda ─────────────────────────────────────────────────────────────── */
+.shopBtn {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--l3);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--txt2);
+}
+.shopBtn:hover {
+  border-color: var(--act);
+  color: var(--txt);
+}
+.shopBox {
+  max-width: 720px;
+}
+.shopHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid #16181c;
+}
+.shopHead h3 {
+  font-family: var(--cd);
+  font-size: 30px;
+  line-height: 1;
+  margin: 8px 0 0;
+  text-transform: uppercase;
+  font-weight: normal;
+}
+.shopCash {
+  margin-left: auto;
+  font-family: var(--cd);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--gold);
+  font-weight: normal;
+}
+.shopNote {
+  flex: none;
+  margin: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid #16181c;
+  font-size: 13.5px;
+  color: var(--txt2);
+}
+.shopBody {
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+.shopGroup + .shopGroup {
+  margin-top: 22px;
+}
+/* el precio necesita ancho propio: la grilla de .options reserva 18px para el chevron */
+.shopBox .options button {
+  grid-template-columns: 20px 1fr auto;
+}
+.chev.price {
+  font-family: var(--cd);
+  font-size: 17px;
+  color: var(--gold);
+}
+
 .autoBtn {
   border: 1px solid var(--l4);
   padding: 5px 12px;

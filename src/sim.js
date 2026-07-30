@@ -60,7 +60,7 @@ export function newCareer({ name, nickname, country, gym, style, weight, stance,
     age,
     stats,
     hype: 0,
-    money: 500,
+    money: 2500, // los ahorros con los que llegás: alcanzan para una cosa de la tienda
     earned: 0,
     record: { w: 0, l: 0, d: 0 },
     methods: { ko: 0, sub: 0, dec: 0, koAgainst: 0 },
@@ -116,6 +116,17 @@ export function applyOption(s, event, optionIndex) {
   s.phase = (event.slot || 'camp') === 'camp' ? 'week' : 'fight'
   if (s.retired) end(s, 'Retiro elegido', s.retired)
   return outcome
+}
+
+// ── la tienda ─────────────────────────────────────────────────────────────────
+// Comprar no consume s.rng a propósito: si moviera el stream, la misma semilla con las
+// mismas decisiones dejaría de dar la misma carrera. Todos los efectos son deterministas.
+export function buy(s, item) {
+  if (item.off || s.money < item.cost) return null
+  s.money -= item.cost // no toca s.earned: earned es lo que entra, no lo que queda
+  const text = item.apply(s)
+  s.log.push({ kind: 'note', text })
+  return text
 }
 
 // ── rivales ───────────────────────────────────────────────────────────────────

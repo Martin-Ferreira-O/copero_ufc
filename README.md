@@ -13,7 +13,8 @@ npm test        # 2000 carreras autojugadas por dificultad + balance + regresion
 ## Cómo está armado
 
 - `src/data.js` — **todo el contenido**: gimnasios, estilos, categorías, escalones, rivales, los ~42 eventos,
-  los 4 planes de round, las 3 dificultades, los textos de round y `TUNING` (las perillas de balance).
+  el catálogo de la tienda (`SHOP`), los 4 planes de round, las 3 dificultades, los textos de round y `TUNING`
+  (las perillas de balance).
 - `src/sim.js` — el motor: RNG sembrado, pelea round por round, ranking, lesiones, progresión, finales.
 - `src/App.jsx` — las tres pantallas (setup, carrera, card final) y la esquina interactiva.
 
@@ -25,6 +26,12 @@ Agregar contenido es empujar objetos a los arrays de `data.js`; el motor no cono
 apretarlo. Antes de cada pelea, `stakes(s)` dice qué se juega — "ganás y ascendés", "perdés y te cortan",
 "te faltan 2 victorias y 9 de hype" — leyendo las mismas reglas que después ejecuta `advance()`. El escalón del
 riel derecho muestra el gate vivo. No hay condiciones ocultas.
+
+**La plata se gasta cuando querés.** El botón *Gastar plata* del riel derecho abre la tienda (`catalog(s)` sobre
+`SHOP` + los gimnasios del escalón siguiente): equipo, servicios de campamento, prensa y mudarte de gimnasio.
+Sigue la misma regla que los eventos — el precio y el efecto real están en el botón antes de apretarlo. El mismo
+ítem **cuesta más cuanto mejor estás** en ese stat, así que la plata arregla debilidades barato y gilda fortalezas
+caro; no hace falta un tope. Comprar no consume RNG: la carrera sigue siendo reproducible por semilla.
 
 **Nada llega después del hecho.** Las consecuencias de carrera (ascenso, corte, democión, ranking) se muestran
 **dentro del veredicto** de la pelea, no como una nota que aparece cuando ya cerraste. Los eventos de la semana de
@@ -59,9 +66,12 @@ ninguna secuencia rara rompa el motor:
 
 | | campeón | retador | rankeado | cortado | retiro forzado | regional | nunca la pegó |
 |---|---|---|---|---|---|---|---|
-| Normal | 25% | 11% | 45% | 2% | 3% | 8% | 1% |
-| Difícil | 10% | 7% | 47% | 7% | 6% | 13% | 6% |
-| Realista | 1% | 2% | 33% | 9% | 12% | 18% | 19% |
+| Normal | 20% | 13% | 46% | 2% | 3% | 7% | 2% |
+| Difícil | 7% | 9% | 45% | 8% | 7% | 13% | 6% |
+| Realista | 1% | 2% | 31% | 9% | 13% | 19% | 19% |
+
+Son el **piso**: el bot del test nunca entra a la tienda. Un jugador que gasta la plata en el gimnasio correcto
+llega bastante más arriba, y esa diferencia es a propósito.
 
 Los métodos caen cerca del deporte real: 54% decisión, 28% KO/TKO, 18% sumisión, 1% empate.
 

@@ -12,12 +12,15 @@ import {
   DIFFICULTIES,
   PLANS,
   PLAN_IDS,
+  SHOP_GROUPS,
+  catalog,
   gymsOf,
 } from './data.js'
 import {
   newCareer,
   nextStep,
   applyOption,
+  buy,
   eventText,
   openFight,
   playRound,
@@ -67,7 +70,6 @@ export default function App() {
       {screen === 'end' && <End key="end" s={career} onRestart={restart} />}
       <footer className="siteFoot">
         <span>Copero · simulador de carrera UFC</span>
-        <span>prototipo de escritorio</span>
       </footer>
     </div>
   )
@@ -337,6 +339,7 @@ export function Career({ s, rerender, onRestart }) {
   const [step, setStep] = useState(() => nextStep(s))
   const [inCage, setInCage] = useState(false)
   const [allHist, setAllHist] = useState(false)
+  const [shop, setShop] = useState(false)
 
   const advance = () => {
     setInCage(false)
@@ -518,6 +521,10 @@ export function Career({ s, rerender, onRestart }) {
             <Tile n={s.titles} label="títulos" />
             <Tile n={usd(s.money)} label="en la cuenta" />
           </div>
+          <button className="shopBtn" onClick={() => setShop(true)}>
+            <span>Gastar plata</span>
+            <span className="chev">▸</span>
+          </button>
           <div className="seedRow">
             <span>{diffOf(s).name.toLowerCase()} · semilla</span>
             <span>{s.seed}</span>
@@ -529,6 +536,7 @@ export function Career({ s, rerender, onRestart }) {
         </button>
       </div>
 
+      {shop && <Shop s={s} rerender={rerender} onClose={() => setShop(false)} />}
       {inCage && <FightPanel s={s} opponent={step.opponent} onDone={advance} />}
     </div>
   )
@@ -609,6 +617,72 @@ function LogEntry({ entry }) {
         {f.method} · R{f.endRound} {f.time} · {entry.tier}
       </span>
     </div>
+  )
+}
+
+// ── la tienda ─────────────────────────────────────────────────────────────────
+// Misma anatomía de botón que los eventos: el efecto real y el precio se ven ANTES de
+// apretar. `catalog` se recalcula en cada render, así los precios suben solos al comprar.
+function Shop({ s, rerender, onClose }) {
+  const [note, setNote] = useState('')
+
+  useEffect(() => {
+    const esc = (e) => e.key === 'Escape' && onClose()
+    addEventListener('keydown', esc)
+    return () => removeEventListener('keydown', esc)
+  }, [])
+
+  const items = catalog(s)
+  const take = (it) => {
+    const text = buy(s, it)
+    if (!text) return
+    setNote(text)
+    rerender()
+  }
+
+  // ponytail: portal a body por lo mismo que FightPanel — .screen anima transform.
+  return createPortal(
+    <div className="fightOverlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="fightBox shopBox">
+        <div className="shopHead">
+          <div>
+            <p className="kicker dot">gastar plata</p>
+            <h3>En la cuenta</h3>
+          </div>
+          <b className="shopCash">US$ {usd(s.money)}</b>
+          <button className="autoBtn" onClick={onClose}>
+            cerrar
+          </button>
+        </div>
+
+        {note && <p className="shopNote">▸ {note}</p>}
+
+        <div className="shopBody">
+          {SHOP_GROUPS.map(([group, title]) => {
+            const list = items.filter((it) => it.group === group)
+            if (!list.length) return null
+            return (
+              <div key={group} className="shopGroup">
+                <div className="boxHead">{title}</div>
+                <div className="options">
+                  {list.map((it) => (
+                    <button key={it.id} disabled={!!it.off} title={it.off || undefined} onClick={() => take(it)}>
+                      <b>{group === 'gym' ? '★' : '▪'}</b>
+                      <span className="oLabel">
+                        {it.label}
+                        <small className="fx">{it.off || it.fx}</small>
+                      </span>
+                      <span className="chev price">US$ {usd(it.cost)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
 

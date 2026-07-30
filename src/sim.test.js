@@ -17,8 +17,9 @@ import {
   mulberry32,
   suggestPlan,
   tierOf,
+  buy,
 } from './sim.js'
-import { STYLES, GYMS, COUNTRIES, WEIGHT_CLASSES, STATS, DIFFICULTIES, PLAN_IDS, EVENTS } from './data.js'
+import { STYLES, GYMS, COUNTRIES, WEIGHT_CLASSES, STATS, DIFFICULTIES, PLAN_IDS, EVENTS, SHOP_GROUPS, catalog } from './data.js'
 
 const METHODS = /^(KO|TKO \(golpes\)|TKO \(golpes desde arriba\)|sumisión \(.+\)|decisión (unánime|dividida)|empate \(mayoría\))$/
 
@@ -132,6 +133,71 @@ test('todo evento declara slot y toda opción declara su efecto', () => {
       assert.equal(typeof o.apply, 'function', `${e.id} / "${o.label}": falta apply`)
     }
   }
+})
+
+// ── la tienda ─────────────────────────────────────────────────────────────────
+const shopper = (over = {}) => Object.assign(newCareer(fighter(mulberry32(3), 'duro'), 3), over)
+const groups = new Set(SHOP_GROUPS.map(([g]) => g))
+
+test('el catálogo declara precio y efecto en todo estado', () => {
+  const states = [
+    shopper(),
+    shopper({ money: 0 }),
+    shopper({ money: 9e6, hype: 100, injuries: [{ label: 'Rodilla', stat: 'cardio', amount: 1, fights: 2 }] }),
+    shopper({ gym: 'AKA' }), // tier 5: no queda ningún gimnasio para comprar
+  ]
+  for (const s of states) {
+    const items = catalog(s)
+    assert.ok(items.length, 'catálogo vacío')
+    const ids = items.map((i) => i.id)
+    assert.equal(new Set(ids).size, ids.length, 'hay ids duplicados en la tienda')
+    for (const it of items) {
+      assert.ok(groups.has(it.group), `${it.id}: grupo desconocido "${it.group}"`)
+      assert.ok(typeof it.fx === 'string' && it.fx.length, `${it.id}: falta el fx que se muestra en el botón`)
+      assert.ok(Number.isInteger(it.cost) && it.cost >= 0, `${it.id}: precio inválido ${it.cost}`)
+      assert.equal(typeof it.apply, 'function', `${it.id}: falta apply`)
+    }
+  }
+  assert.ok(!catalog(shopper({ gym: 'AKA' })).some((i) => i.group === 'gym'), 'ofrece gimnasios peores que el tuyo')
+  assert.ok(catalog(shopper({ money: 0 })).every((i) => i.off), 'sin plata igual te deja comprar')
+})
+
+test('comprar cobra exacto y nunca te deja en rojo', () => {
+  const broke = shopper({ money: 0 })
+  for (const it of catalog(broke)) assert.equal(buy(broke, it), null, `${it.id}: te dejó comprar sin plata`)
+  assert.equal(broke.money, 0)
+  assert.equal(broke.log.length, 0, 'una compra fallida dejó rastro')
+
+  const s = shopper({ money: 50000 })
+  const it = catalog(s).find((i) => i.id === 'bucal')
+  const chin = s.stats.chin
+  assert.ok(buy(s, it), 'no se pudo comprar algo que se podía pagar')
+  assert.equal(s.money, 50000 - it.cost)
+  assert.ok(s.stats.chin > chin, 'el mentón no subió')
+  assert.equal(s.log.at(-1).kind, 'note', 'la compra no quedó en el historial')
+})
+
+test('el precio sube con el atributo y frena la compra de un 10', () => {
+  const s = shopper({ money: 9e9 })
+  const first = catalog(s).find((i) => i.id === 'bucal').cost
+  for (let i = 0; i < 50; i++) buy(s, catalog(s).find((x) => x.id === 'bucal'))
+  const last = catalog(s).find((i) => i.id === 'bucal').cost
+  assert.ok(s.stats.chin <= 10, `mentón fuera de rango: ${s.stats.chin}`)
+  assert.ok(last > first * 3, `el precio no escaló: ${first} → ${last}`)
+})
+
+test('comprar no consume RNG: la semilla sigue valiendo', () => {
+  const rivals = (compra) => {
+    const s = newCareer(fighter(mulberry32(11), 'duro'), 11)
+    s.money = 9e6
+    const out = []
+    for (let i = 0; i < 6; i++) {
+      if (compra) buy(s, catalog(s).find((x) => x.id === 'video'))
+      out.push(buildOpponent(s).name)
+    }
+    return out
+  }
+  assert.deepEqual(rivals(true), rivals(false), 'comprar movió el stream del RNG')
 })
 
 // Chequeo de balance, no de correctitud: si un final o un método se come todo, hay que girar TUNING.

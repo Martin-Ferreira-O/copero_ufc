@@ -269,9 +269,11 @@ export const WEIGHT_CLASSES = [
 // Los escalones. `need` = victorias necesarias en el escalón para que te miren de arriba.
 // En `ranked` el gate no es `need` sino el número de ranking: se abre en el #2.
 export const LADDER = [
-  { id: 'amateur', name: 'Amateur', fights: 3, need: 3, hype: 0, rounds: 3, pay: 0, oppLevel: 4.7 },
-  { id: 'regional', name: 'Regional', fights: 4, need: 4, hype: 16, rounds: 3, pay: 1200, oppLevel: 5.9 },
-  { id: 'dwcs', name: "Dana White's Contender Series", fights: 1, need: 1, hype: 32, rounds: 3, pay: 5000, oppLevel: 6.4 },
+  // Las bolsas de abajo no son realistas, son jugables: sin algo de plata en amateur y regional
+  // la tienda está vacía las primeras diez peleas y elegir no cuesta nada.
+  { id: 'amateur', name: 'Amateur', fights: 3, need: 3, hype: 0, rounds: 3, pay: 900, oppLevel: 4.7 },
+  { id: 'regional', name: 'Regional', fights: 4, need: 4, hype: 16, rounds: 3, pay: 3200, oppLevel: 5.9 },
+  { id: 'dwcs', name: "Dana White's Contender Series", fights: 1, need: 1, hype: 32, rounds: 3, pay: 6000, oppLevel: 6.4 },
   { id: 'prelim', name: 'UFC — preliminares', fights: 3, need: 3, hype: 44, rounds: 3, pay: 12000, oppLevel: 6.9 },
   { id: 'maincard', name: 'UFC — main card', fights: 3, need: 3, hype: 60, rounds: 3, pay: 40000, oppLevel: 7.4 },
   { id: 'ranked', name: 'UFC — top 15', fights: 4, need: 4, hype: 76, rounds: 3, pay: 120000, oppLevel: 8.3 },
@@ -720,64 +722,8 @@ export const EVENTS = [
   },
 
   // ── entre peleas ────────────────────────────────────────────────────────────
-  {
-    id: 'presupuesto',
-    weight: 5,
-    every: 3,
-    when: (s) => s.money >= 8000,
-    title: 'La plata del campamento',
-    text: (s) => `Tenés US$ ${s.money.toLocaleString('es-AR')} en la cuenta. Un campamento serio se compra, no se reza.`,
-    options: [
-      {
-        label: 'Sparring de elite (15k)',
-        fx: '−15k · +0.5 Striking · +0.5 Grappling',
-        can: (s) => s.money >= 15000,
-        apply: (s) => {
-          cash(s, -15000)
-          bump(s, 'striking', 0.5)
-          bump(s, 'grappling', 0.5)
-          return 'Trajiste tres compañeros de otro país sólo para que te peguen. La mejor plata que gastaste.'
-        },
-      },
-      {
-        label: 'Nutricionista de verdad (8k)',
-        fx: '−8k · el corte de peso no te afecta por 5 peleas',
-        can: (s) => s.money >= 8000,
-        apply: (s) => {
-          cash(s, -8000)
-          s.flags.nutri = 5
-          bump(s, 'cardio', 0.3)
-          return 'Balanza, pesos y comida medida al gramo. Se terminó llegar al pesaje arrastrándose.'
-        },
-      },
-      {
-        label: 'Preparador físico (10k)',
-        fx: '−10k · +0.9 Cardio',
-        can: (s) => s.money >= 10000,
-        apply: (s) => {
-          cash(s, -10000)
-          bump(s, 'cardio', 0.9)
-          return 'Un tipo con planilla que te mide todo. Cinco rounds ya no son un problema.'
-        },
-      },
-      {
-        label: 'Cirugía y rehabilitación en serio (25k)',
-        fx: '−25k · curás una lesión · 5 meses',
-        can: (s) => s.money >= 25000 && s.injuries.length > 0,
-        apply: (s) => {
-          cash(s, -25000)
-          const inj = heal(s)
-          age(s, 0.4)
-          return `${inj.label}: operada por el mejor y rehabilitada como corresponde. Volvés entero.`
-        },
-      },
-      {
-        label: 'No gastar nada',
-        fx: 'te queda la plata',
-        apply: () => 'Guardaste todo. Nadie sabe cuánto va a durar esto.',
-      },
-    ],
-  },
+  // El evento "La plata del campamento" vivía acá. Ahora es la tienda (SHOP, abajo):
+  // sus cuatro compras están siempre disponibles en vez de depender de una lotería.
   {
     id: 'tapar-el-agujero',
     weight: 4,
@@ -1825,3 +1771,129 @@ export const EVENTS = [
     ],
   },
 ]
+
+// ── la tienda ─────────────────────────────────────────────────────────────────
+// Lo que se compra con la plata, disponible siempre. Mismo contrato que las opciones de
+// evento: label, fx y apply(s) -> texto. Nada de acá toca s.rng: comprar es determinista,
+// si no se rompe el contrato de la semilla.
+//
+// El mismo ítem cuesta más cuanto mejor estás: llevar el mentón de 8 a 8.5 no puede valer
+// lo mismo que de 4 a 4.5, si no la plata te compra un 10 en todo. El precio real se ve en
+// el botón, así que se autolimita solo, sin topes duros ni una mecánica nueva.
+const price = (base, level) => Math.round((base * 1.55 ** (level - 5)) / 100) * 100
+
+// Un ítem con `stat`/`gain` arma su precio, su fx y su apply solo. Si trae `cost`/`apply`
+// propios, mandan esos.
+const SHOP = [
+  { id: 'bucal', group: 'gear', stat: 'chin', gain: 0.5, base: 1800, label: 'Protector bucal a medida y trabajo de cuello', done: 'Molde dental, cuello más grueso y la cabeza que deja de rebotar.' },
+  { id: 'altura', group: 'gear', stat: 'cardio', gain: 0.5, base: 2200, label: 'Cámara hipóxica en la pieza', done: 'Dormís a 3.000 metros sin salir del barrio. El motor lo agradece.' },
+  { id: 'manoplas', group: 'gear', stat: 'striking', gain: 0.5, base: 2400, label: 'Entrenador de manos particular', done: 'Manoplas a las siete de la mañana, uno a uno. Las manos salen distinto.' },
+  { id: 'tatami', group: 'gear', stat: 'grappling', gain: 0.5, base: 2400, label: 'Compañeros de grappling fijos', done: 'Dos luchadores que vienen sí o sí. Se terminó rodar con el que aparezca.' },
+  { id: 'video', group: 'gear', stat: 'iq', gain: 0.5, base: 2600, label: 'Analista de video para el equipo', done: 'Alguien que mira cien peleas y te dice las tres cosas que importan.' },
+
+  { id: 'fisico', group: 'camp', stat: 'cardio', gain: 0.9, base: 10000, label: 'Preparador físico', done: 'Un tipo con planilla que te mide todo. Cinco rounds ya no son un problema.' },
+  {
+    id: 'sparring',
+    group: 'camp',
+    label: 'Sparring de elite importado',
+    fx: '+0.5 Striking · +0.5 Grappling',
+    cost: (s) => price(15000, (s.stats.striking + s.stats.grappling) / 2),
+    apply: (s) => {
+      bump(s, 'striking', 0.5)
+      bump(s, 'grappling', 0.5)
+      return 'Trajiste tres compañeros de otro país sólo para que te peguen. La mejor plata que gastaste.'
+    },
+  },
+  {
+    id: 'nutri',
+    group: 'camp',
+    label: 'Nutricionista de verdad',
+    fx: '+0.3 Cardio · el corte de peso no te afecta por 5 peleas',
+    cost: () => 8000,
+    apply: (s) => {
+      s.flags.nutri = 5
+      bump(s, 'cardio', 0.3)
+      return 'Balanza, pesos y comida medida al gramo. Se terminó llegar al pesaje arrastrándose.'
+    },
+  },
+  {
+    id: 'cirugia',
+    group: 'camp',
+    label: 'Cirugía y rehabilitación en serio',
+    fx: 'curás una lesión · 5 meses',
+    cost: () => 25000,
+    can: (s) => (s.injuries.length ? null : 'no tenés nada que operar'),
+    apply: (s) => {
+      const inj = heal(s)
+      age(s, 0.4)
+      return `${inj.label}: operada por el mejor y rehabilitada como corresponde. Volvés entero.`
+    },
+  },
+
+  {
+    id: 'media',
+    group: 'press',
+    label: 'Media training y sesión de fotos',
+    fx: '+4 hype',
+    cost: (s) => price(5000, s.hype / 12 + 2),
+    apply: (s) => {
+      hype(s, 4)
+      return 'Aprendés a hablar a cámara sin mirarte los pies. Las notas ya no dan vergüenza ajena.'
+    },
+  },
+  {
+    id: 'manager',
+    group: 'press',
+    label: 'Manager con contactos de verdad',
+    fx: '+6 hype',
+    cost: (s) => price(9000, s.hype / 12 + 2),
+    apply: (s) => {
+      hype(s, 6)
+      return 'Se lleva un porcentaje y consigue que tu nombre aparezca donde tiene que aparecer.'
+    },
+  },
+]
+
+// Los gimnasios no son una lista fija: son los del escalón inmediatamente superior al tuyo.
+// Sólo el siguiente, no todos los mejores: si no son veinte filas apagadas que dicen "no te
+// alcanza", y de paso se sube de a un escalón como todo lo demás en el juego. Cambiarte aplica
+// el bonus una vez (mitad, igual que al crear la carrera) y sobre todo mejora el crecimiento
+// por pelea para siempre, que es lo que de verdad estás comprando.
+const gymOffers = (s) =>
+  Object.entries(GYMS)
+    .filter(([, g]) => g.tier === GYMS[s.gym].tier + 1)
+    .map(([name, g]) => ({
+      id: `gym:${name}`,
+      group: 'gym',
+      label: `${name} · ${'★'.repeat(g.tier)}`,
+      fx: [...Object.entries(g.bonus).map(([k, v]) => `+${v * 0.5} ${STAT_LABELS[k]}`), 'mejor sparring para siempre'].join(' · '),
+      cost: () => g.tier * 9000,
+      apply: (st) => {
+        for (const [k, v] of Object.entries(g.bonus)) bump(st, k, v * 0.5)
+        st.gym = name
+        return `Te mudaste a ${name}. ${g.flavor}`
+      },
+    }))
+
+export const SHOP_GROUPS = [
+  ['gear', 'equipo y productos'],
+  ['camp', 'el campamento'],
+  ['press', 'prensa y patrocinio'],
+  ['gym', 'cambiar de gimnasio'],
+]
+
+// Lo único que consume la UI: la lista con precio, efecto y motivo de bloqueo ya resueltos.
+// Se recalcula en cada render, así el precio sube solo después de comprar.
+export const catalog = (s) =>
+  [...SHOP, ...gymOffers(s)].map((it) => {
+    const cost = it.cost ? it.cost(s) : price(it.base, s.stats[it.stat])
+    return {
+      id: it.id,
+      group: it.group,
+      label: it.label,
+      fx: it.fx || `+${it.gain} ${STAT_LABELS[it.stat]}`,
+      cost,
+      off: (it.can && it.can(s)) || (s.money < cost ? 'no te alcanza la plata' : null),
+      apply: it.apply || ((st) => (bump(st, it.stat, it.gain), it.done)),
+    }
+  })
