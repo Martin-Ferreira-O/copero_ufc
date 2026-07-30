@@ -234,6 +234,10 @@ export const GYMS = {
   'Entram Gym': { country: 'mx', tier: 3, bonus: { striking: 2, cardio: 1 }, flavor: 'Tijuana. Boxeo de verdad metido adentro del MMA.' },
   'Lobo Gym': { country: 'mx', tier: 2, bonus: { striking: 1, chin: 1 }, flavor: 'Guadalajara. La mitad del gimnasio pelea los sábados en un salón de fiestas.' },
   'Tiger Muay Thai': { country: 'th', tier: 3, bonus: { striking: 2, cardio: 1 }, flavor: 'Phuket. Dos sesiones por día y turistas filmándote.' },
+  'Dojo Inferno': { country: 'cl', tier: 2, bonus: { striking: 1, chin: 1 }, flavor: 'Sparring duro, poca ventilación y el nombre se lo ganó el lugar solo.' },
+  'Club de Boxeo Puente Alto': { country: 'cl', tier: 1, bonus: { striking: 2 }, flavor: 'Manos y nada más. Si te llevan al piso, ahí no te enseñaron nada.' },
+  'Dojo MiñoTauro': { country: 'cl', tier: 2, bonus: { grappling: 1, iq: 1 }, flavor: 'Gi, guardia y paciencia. Se rueda hasta que alguien golpea el tatami.' },
+  Esparta: { country: 'cl', tier: 2, bonus: { cardio: 1, chin: 1 }, flavor: 'Acondicionamiento antes que técnica: acá el que se cansa pierde.' },
   'Tristar Gym': { country: 'ca', tier: 4, bonus: { iq: 2, grappling: 1 }, flavor: 'Montreal. Todo se resuelve con una pizarra y un jab.' },
   'City Kickboxing': { country: 'nz', tier: 4, bonus: { striking: 2, iq: 1 }, flavor: 'Auckland. Striking limpio y cero solemnidad.' },
   'Allstars Training Center': { country: 'se', tier: 3, bonus: { cardio: 2, grappling: 1 }, flavor: 'Estocolmo. Frío, orden y mucho wrestling.' },
@@ -244,6 +248,7 @@ export const COUNTRIES = {
   us: { name: 'Estados Unidos', regional: 'LFA' },
   br: { name: 'Brasil', regional: 'Jungle Fight' },
   mx: { name: 'México', regional: 'Combate Global' },
+  cl: { name: 'Chile', regional: 'Fusion FC' },
   ie: { name: 'Irlanda', regional: 'Cage Warriors' },
   gb: { name: 'Reino Unido', regional: 'Cage Warriors' },
   ru: { name: 'Rusia', regional: 'Fight Nights Global' },
@@ -1780,7 +1785,12 @@ export const EVENTS = [
 // El mismo ítem cuesta más cuanto mejor estás: llevar el mentón de 8 a 8.5 no puede valer
 // lo mismo que de 4 a 4.5, si no la plata te compra un 10 en todo. El precio real se ve en
 // el botón, así que se autolimita solo, sin topes duros ni una mecánica nueva.
-const price = (base, level) => Math.round((base * 1.55 ** (level - 5)) / 100) * 100
+//
+// Y arriba de SOFT_CAP el precio deja de escalar y se dispara: en UFC entran bolsas de seis
+// cifras y sin este muro la tienda te compra un 10 en todo antes de pelear por el título.
+// Los últimos puntos se ganan peleando, no comprando.
+export const SOFT_CAP = 6.5
+const price = (base, level) => Math.round((base * 1.55 ** (level - 5) * 2.6 ** Math.max(0, level - SOFT_CAP)) / 100) * 100
 
 // Un ítem con `stat`/`gain` arma su precio, su fx y su apply solo. Si trae `cost`/`apply`
 // propios, mandan esos.
@@ -1796,7 +1806,7 @@ const SHOP = [
     id: 'sparring',
     group: 'camp',
     label: 'Sparring de elite importado',
-    fx: '+0.5 Striking · +0.5 Grappling',
+    stats: { striking: 0.5, grappling: 0.5 },
     cost: (s) => price(15000, (s.stats.striking + s.stats.grappling) / 2),
     apply: (s) => {
       bump(s, 'striking', 0.5)
@@ -1808,7 +1818,8 @@ const SHOP = [
     id: 'nutri',
     group: 'camp',
     label: 'Nutricionista de verdad',
-    fx: '+0.3 Cardio · el corte de peso no te afecta por 5 peleas',
+    stats: { cardio: 0.3 },
+    fx: 'el corte de peso no te afecta por 5 peleas',
     cost: () => 8000,
     apply: (s) => {
       s.flags.nutri = 5
@@ -1866,7 +1877,8 @@ const gymOffers = (s) =>
       id: `gym:${name}`,
       group: 'gym',
       label: `${name} · ${'★'.repeat(g.tier)}`,
-      fx: [...Object.entries(g.bonus).map(([k, v]) => `+${v * 0.5} ${STAT_LABELS[k]}`), 'mejor sparring para siempre'].join(' · '),
+      stats: Object.fromEntries(Object.entries(g.bonus).map(([k, v]) => [k, v * 0.5])),
+      fx: 'mejor sparring para siempre',
       cost: () => g.tier * 9000,
       apply: (st) => {
         for (const [k, v] of Object.entries(g.bonus)) bump(st, k, v * 0.5)
@@ -1887,13 +1899,23 @@ export const SHOP_GROUPS = [
 export const catalog = (s) =>
   [...SHOP, ...gymOffers(s)].map((it) => {
     const cost = it.cost ? it.cost(s) : price(it.base, s.stats[it.stat])
+    const gains = it.stats || (it.stat ? { [it.stat]: it.gain } : {})
+    const keys = Object.keys(gains)
+    // Los atributos que toca, con el número de ahora y el de después: se ve qué comprás.
+    const deltas = keys.map((k) => `${STAT_LABELS[k]} ${s.stats[k].toFixed(1)} → ${clamp(s.stats[k] + gains[k], 1, 10).toFixed(1)}`)
+    // Si todo lo que sube ya está en 10 es tirar la plata: se bloquea. Salvo que el ítem
+    // traiga algo más (`fx`): el gimnasio y el nutricionista siguen valiendo con el stat al tope.
+    const maxed = keys.length > 0 && !it.fx && keys.every((k) => s.stats[k] >= 10)
     return {
       id: it.id,
       group: it.group,
       label: it.label,
-      fx: it.fx || `+${it.gain} ${STAT_LABELS[it.stat]}`,
+      fx: [...deltas, it.fx].filter(Boolean).join(' · '),
       cost,
-      off: (it.can && it.can(s)) || (s.money < cost ? 'no te alcanza la plata' : null),
+      off:
+        (maxed && 'ya lo tenés al máximo') ||
+        (it.can && it.can(s)) ||
+        (s.money < cost ? 'no te alcanza la plata' : null),
       apply: it.apply || ((st) => (bump(st, it.stat, it.gain), it.done)),
     }
   })

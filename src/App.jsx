@@ -13,6 +13,7 @@ import {
   PLANS,
   PLAN_IDS,
   SHOP_GROUPS,
+  SOFT_CAP,
   catalog,
   gymsOf,
 } from './data.js'
@@ -105,6 +106,7 @@ function Setup({ onStart }) {
   const [nickname, setNickname] = useState('')
   const [age, setAge] = useState(20)
   const [seed, setSeed] = useState('')
+  const [warn, setWarn] = useState(false)
 
   const changeCountry = (c) => {
     setCountry(c)
@@ -112,6 +114,7 @@ function Setup({ onStart }) {
   }
 
   const start = () => {
+    if (!name.trim()) return setWarn(true)
     const s = (seed.trim() && Math.abs(hashSeed(seed.trim()))) || Math.floor(Math.random() * 1e9)
     onStart(
       newCareer(
@@ -183,7 +186,17 @@ function Setup({ onStart }) {
             <div className="fields">
               <label className="field">
                 <span className="lbl">Nombre</span>
-                <input className="big" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" maxLength={24} />
+                <input
+                  className={warn ? 'big bad' : 'big'}
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setWarn(false)
+                  }}
+                  placeholder="Tu nombre"
+                  maxLength={24}
+                />
+                {warn && <span className="hint bad">Ponete un nombre antes de empezar.</span>}
               </label>
 
               <div className="field">
@@ -318,7 +331,7 @@ function Setup({ onStart }) {
             <div className="line1">
               {name.trim() || 'Peleador Sin Nombre'} {nickname.trim() && <span>“{nickname.trim()}”</span>}
             </div>
-            <div className="line2">{meta}</div>
+            <div className={warn ? 'line2 bad' : 'line2'}>{warn ? '⚠ Falta el nombre: escribilo arriba, en “¿Quién sos?”.' : meta}</div>
           </div>
           <label className="field seed">
             <span className="lbl">Semilla (opcional)</span>
@@ -655,6 +668,7 @@ function Shop({ s, rerender, onClose }) {
           </button>
         </div>
 
+        <p className="hint">Arriba de {SOFT_CAP} cada décima se vuelve carísima: los últimos puntos se ganan peleando.</p>
         {note && <p className="shopNote">▸ {note}</p>}
 
         <div className="shopBody">

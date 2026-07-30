@@ -184,6 +184,12 @@ test('el precio sube con el atributo y frena la compra de un 10', () => {
   const last = catalog(s).find((i) => i.id === 'bucal').cost
   assert.ok(s.stats.chin <= 10, `mentón fuera de rango: ${s.stats.chin}`)
   assert.ok(last > first * 3, `el precio no escaló: ${first} → ${last}`)
+
+  const maxed = catalog(s).find((i) => i.id === 'bucal')
+  assert.equal(s.stats.chin, 10, 'el mentón no llegó al tope')
+  assert.ok(maxed.off, 'te deja comprar un atributo que ya está en 10')
+  assert.equal(buy(s, maxed), null, 'la compra al tope igual pasó')
+  assert.match(maxed.fx, /Mentón 10\.0 → 10\.0/, 'el botón no muestra el atributo que comprás')
 })
 
 test('comprar no consume RNG: la semilla sigue valiendo', () => {

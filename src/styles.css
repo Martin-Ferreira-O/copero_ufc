@@ -441,6 +441,13 @@ input[type='range'] {
   line-height: 1.4;
   color: var(--dim2);
 }
+/* falta el nombre: el aviso vive al lado del campo y abajo, junto al botón */
+.bad {
+  color: var(--loss);
+}
+input.bad {
+  border-color: var(--loss);
+}
 
 .panel select {
   width: 100%;
