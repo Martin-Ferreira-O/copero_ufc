@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   COUNTRIES,
   GYMS,
@@ -37,6 +38,8 @@ import {
 const PACE = 1500 // ms que queda en pantalla un round ya resuelto
 const SHORT = { amateur: 'AM', regional: 'REG', dwcs: 'DWCS', prelim: 'PRE', maincard: 'MAIN', ranked: 'T15', title: 'TÍT', champ: 'CAMP' }
 const LETTERS = 'ABCDEF'
+// ponytail: el historial arranca cortado; el resto se despliega a pedido.
+const HIST_N = 6
 
 // En el escalón regional la promotora depende del país: le da color a la carrera.
 const promoName = (s) => (s.tier === 'regional' ? COUNTRIES[s.country].regional : tierOf(s).name)
@@ -333,6 +336,7 @@ function Setup({ onStart }) {
 export function Career({ s, rerender, onRestart }) {
   const [step, setStep] = useState(() => nextStep(s))
   const [inCage, setInCage] = useState(false)
+  const [allHist, setAllHist] = useState(false)
 
   const advance = () => {
     setInCage(false)
@@ -479,7 +483,16 @@ export function Career({ s, rerender, onRestart }) {
             <span className="rule" />
             <span className="count">{s.fights.length ? `${s.fights.length} peleas` : 'todavía nada'}</span>
           </div>
-          <div className="histList">{s.log.map((entry, i) => <LogEntry key={i} entry={entry} />).reverse()}</div>
+          <div className="histList">
+            {(allHist ? s.log : s.log.slice(-HIST_N))
+              .map((entry, i) => <LogEntry key={s.log.length - i} entry={entry} />)
+              .reverse()}
+          </div>
+          {s.log.length > HIST_N && (
+            <button className="histMore" onClick={() => setAllHist(!allHist)}>
+              {allHist ? '▲ mostrar menos' : `▼ ver todo (${s.log.length})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -645,7 +658,9 @@ function FightPanel({ s, opponent, onDone }) {
   const byDecision = /decisión|empate/.test(f.method || '')
   const tip = suggestPlan(s, f)
 
-  return (
+  // ponytail: portal a body — dentro de .screen (que anima transform) el fixed
+  // se ancla al ancestro y la jaula queda centrada en la página, no en la pantalla.
+  return createPortal(
     <div className="fightOverlay">
       <div className="fightBox">
         {phase === 'reveal' && <span className="flash bell" key={shown.length} />}
@@ -729,7 +744,8 @@ function FightPanel({ s, opponent, onDone }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

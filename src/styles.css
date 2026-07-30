@@ -1250,6 +1250,23 @@ input[type='range'] {
   flex-direction: column;
   gap: 11px;
 }
+.histMore {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 0;
+  border: 1px solid var(--l2);
+  background: none;
+  color: var(--dim3);
+  font: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.histMore:hover {
+  color: var(--txt2);
+  border-color: var(--l3);
+}
 /* El renglón más nuevo queda primero, así que basta animar al primer hijo.
    ponytail: sin escalonado por entrada — un selector en vez de índices en JS. */
 .histList > :first-child {
