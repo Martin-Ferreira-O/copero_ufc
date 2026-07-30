@@ -18,8 +18,9 @@ import {
   suggestPlan,
   tierOf,
   buy,
+  takeOffer,
 } from './sim.js'
-import { STYLES, GYMS, COUNTRIES, WEIGHT_CLASSES, STATS, DIFFICULTIES, PLAN_IDS, EVENTS, SHOP_GROUPS, catalog } from './data.js'
+import { STYLES, GYMS, COUNTRIES, WEIGHT_CLASSES, STATS, DIFFICULTIES, PLAN_IDS, EVENTS, SHOP_GROUPS, TROPHIES, catalog } from './data.js'
 
 const METHODS = /^(KO|TKO \(golpes\)|TKO \(golpes desde arriba\)|sumisión \(.+\)|decisión (unánime|dividida)|empate \(mayoría\))$/
 
@@ -53,6 +54,16 @@ function autoplay(seed, diff, choose) {
       const usable = step.event.options.map((o, i) => i).filter((i) => !step.event.options[i].can || step.event.options[i].can(s))
       assert.ok(usable.length, `${step.event.id}: ninguna opción elegible`)
       applyOption(s, step.event, p(usable))
+    } else if (step.kind === 'offers') {
+      assert.ok(step.offers.length >= 2, 'un callout con una sola opción no es una decisión')
+      for (const o of step.offers) {
+        assert.ok(o.id && o.label && o.fx && o.taken, `oferta sin label/fx/taken: ${o.id}`)
+        assert.equal(typeof o.apply, 'function', `oferta sin apply: ${o.id}`)
+      }
+      // El jugador competente acepta la pelea que le ofrecen; el caos pide cualquier cosa.
+      // Si el bot "competente" pidiera rivales al azar, la tabla de finales mediría su
+      // imprudencia y no el balance del juego.
+      takeOffer(s, step.offers, choose ? 0 : Math.floor(rng() * step.offers.length))
     } else {
       for (const st of stakes(s)) assert.ok(st.text && ['good', 'bad', 'info'].includes(st.tone), 'stakes mal formado')
       const fight = simulateFight(s, step.opponent, plan)
@@ -133,6 +144,73 @@ test('todo evento declara slot y toda opción declara su efecto', () => {
       assert.equal(typeof o.apply, 'function', `${e.id} / "${o.label}": falta apply`)
     }
   }
+})
+
+test('los logros se desbloquean una sola vez y ninguno es imposible', () => {
+  const ids = new Set()
+  for (const t of TROPHIES) {
+    assert.ok(t.id && t.label && t.desc, `logro incompleto: ${t.id}`)
+    assert.equal(typeof t.when, 'function', `${t.id}: falta when`)
+    assert.ok(!ids.has(t.id), `logro duplicado: ${t.id}`)
+    ids.add(t.id)
+  }
+  let total = 0
+  for (const s of careers) {
+    assert.equal(new Set(s.trophies).size, s.trophies.length, 'un logro se desbloqueó dos veces')
+    for (const id of s.trophies) assert.ok(ids.has(id), `logro fantasma: ${id}`)
+    total += s.trophies.length
+  }
+  // Un logro que no sale nunca en 7200 carreras es contenido muerto: o está roto o es inalcanzable.
+  const seen = new Set(careers.flatMap((s) => s.trophies))
+  const nunca = TROPHIES.filter((t) => !seen.has(t.id)).map((t) => t.id)
+  assert.deepEqual(nunca, [], `logros que no salen nunca: ${nunca.join(', ')}`)
+  console.log(`logros: ${(total / careers.length).toFixed(1)} por carrera de ${TROPHIES.length}`)
+})
+
+// El guardado vive en App.jsx, pero lo que puede romperse en silencio es esto: que el estado
+// del RNG no sobreviva al JSON. Si se rompe, recargar te cambia la carrera y nadie se entera.
+test('la carrera sobrevive a JSON: recargar no cambia nada', () => {
+  const trip = (s) => {
+    const back = JSON.parse(JSON.stringify({ ...s, rng: s.rng.state(), pending: null }))
+    back.rng = mulberry32(back.rng)
+    return back
+  }
+  const step = (s) => {
+    const st = nextStep(s)
+    if (st.kind === 'end') return false
+    if (st.kind === 'event') applyOption(s, st.event, 0)
+    else if (st.kind === 'offers') takeOffer(s, st.offers, 0)
+    else applyFight(s, simulateFight(s, st.opponent, suggestPlan), st.opponent)
+    return true
+  }
+  const print = (s) => JSON.stringify([s.record, s.tier, s.rank, s.trophies, s.fights.map((f) => `${f.opponent}|${f.result}|${f.method}`)])
+
+  for (const seed of [4, 11, 23]) {
+    const a = newCareer(fighter(mulberry32(seed), 'duro'), seed)
+    let b = newCareer(fighter(mulberry32(seed), 'duro'), seed)
+    for (let i = 0; i < 400 && step(a); i++);
+    for (let i = 0; i < 400; i++) {
+      b = trip(b) // se guarda y se restaura en CADA paso, el peor caso
+      if (!step(b)) break
+    }
+    assert.ok(a.over, `semilla ${seed}: la carrera de control no terminó`)
+    assert.equal(print(b), print(a), `semilla ${seed}: recargar cambió la carrera`)
+  }
+})
+
+test('el bono de la noche sólo cae en UFC y suma a lo ganado', () => {
+  // regional: pelear una guerra no puede pagar bono
+  const s = Object.assign(newCareer(fighter(mulberry32(9), 'duro'), 9), { tier: 'regional' })
+  const before = s.earned
+  const opp = buildOpponent(s)
+  const notes = applyFight(s, { result: 'win', method: 'KO', methodKey: 'ko', endRound: 1, war: true, a: { hurt: false, downs: 0 } }, opp)
+  assert.ok(!notes.some((n) => /bono/.test(n)), 'pagó bono de la noche fuera de UFC')
+
+  const u = Object.assign(newCareer(fighter(mulberry32(9), 'duro'), 9), { tier: 'maincard' })
+  const uBefore = u.earned
+  const uNotes = applyFight(u, { result: 'win', method: 'KO', methodKey: 'ko', endRound: 1, war: false, a: { hurt: false, downs: 0 } }, buildOpponent(u))
+  assert.ok(uNotes.some((n) => /Actuación de la Noche/.test(n)), 'finalizar en UFC no pagó bono')
+  assert.ok(u.earned - uBefore > s.earned - before, 'el bono no entró en lo ganado')
 })
 
 // ── la tienda ─────────────────────────────────────────────────────────────────

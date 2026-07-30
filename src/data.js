@@ -17,8 +17,13 @@ export const TUNING = {
   hypeWin: 6,
   hypeFinish: 5, // extra por finalizar
   hypeLoss: -5,
+  hypeCallout: 8, // extra por ganar la pelea que pediste vos
   yearsPerFight: 0.42,
   retireAge: 39,
+  // Bono de la noche = bonusBase + bonusShare de la bolsa del escalón. Ni fijo ni proporcional:
+  // fijo sería irrelevante siendo campeón, proporcional sería absurdo en preliminares.
+  bonusBase: 10000,
+  bonusShare: 0.3,
 }
 
 // Se elige en el setup. Toca rival, crecimiento, cuántas derrotas aguanta el contrato y la plata.
@@ -1775,6 +1780,43 @@ export const EVENTS = [
       },
     ],
   },
+  // El único evento que mueve el escalón: entregás el cinturón y arrancás de nuevo #8 en la
+  // categoría de arriba. Es la meta que le faltaba al campeón, que si no defiende hasta los 39.
+  {
+    id: 'segunda-division',
+    weight: 5,
+    every: 6,
+    when: (s) => s.tier === 'champ' && s.titles >= 3 && WEIGHT_CLASSES.findIndex((w) => w.id === s.weight) < WEIGHT_CLASSES.length - 1,
+    title: 'La categoría de arriba',
+    text: (s) =>
+      `Ya no queda nadie en ${WEIGHT_CLASSES.find((w) => w.id === s.weight).name} que no hayas pasado por arriba. ` +
+      'El teléfono suena: el campeón de la categoría de arriba dijo tu nombre en una conferencia. Nadie tiene dos cinturones.',
+    options: [
+      {
+        label: 'Subir de categoría e ir por el segundo cinturón',
+        fx: 'entregás el título · entrás #8 arriba · te cuesta el mentón 4 peleas',
+        apply: (s) => {
+          const name = moveUp(s)
+          s.tier = 'ranked'
+          s.rank = 8
+          s.tierFights = 0
+          s.tierWins = 0
+          // Sos el chico de la categoría hasta que el cuerpo se acomoda. Usa el sistema de
+          // lesiones porque es lo que ya se ve siempre en la ficha y expira solo.
+          injure(s, 'Todavía chico para la categoría', 'chin', 0.6, 4)
+          return `Dejás el cinturón vacante y subís a ${name}. Empezás de nuevo desde el #8, con el mismo nombre y un cuerpo que todavía no es de acá.`
+        },
+      },
+      {
+        label: 'Quedarte y seguir defendiendo lo tuyo',
+        fx: '+5 hype',
+        apply: (s) => {
+          hype(s, 5)
+          return 'Un cinturón se defiende, no se colecciona. Te quedás donde sos el mejor del mundo.'
+        },
+      },
+    ],
+  },
 ]
 
 // ── la tienda ─────────────────────────────────────────────────────────────────
@@ -1919,3 +1961,28 @@ export const catalog = (s) =>
       apply: it.apply || ((st) => (bump(st, it.stat, it.gain), it.done)),
     }
   })
+
+// ── los logros ────────────────────────────────────────────────────────────────
+// Se chequean una vez por pelea, en orden, y saltan la primera vez que `when` da true.
+// `when` tiene que ser PURO: no puede tocar s.rng ni mutar nada — se llama en cada pelea.
+// Van al historial, a la card final y al texto que se comparte.
+const PRELIM = LADDER.findIndex((t) => t.id === 'prelim')
+
+export const TROPHIES = [
+  { id: 'primera', label: 'La primera', desc: 'Ganaste tu primera pelea profesional.', when: (s) => s.record.w >= 1 },
+  { id: 'ko1', label: 'Buenas noches', desc: 'Tu primer nocaut. No se olvida ninguno, pero el primero menos.', when: (s) => s.methods.ko >= 1 },
+  { id: 'sub1', label: 'Se durmió', desc: 'Tu primera sumisión. Lo hiciste golpear tres veces.', when: (s) => s.methods.sub >= 1 },
+  { id: 'racha3', label: 'Tres al hilo', desc: 'Tres victorias seguidas. Empiezan a preguntar quién sos.', when: (s) => s.streak >= 3 },
+  { id: 'racha6', label: 'Seis al hilo', desc: 'Seis seguidas. Ahora los que mandan tienen que darte algo.', when: (s) => s.streak >= 6 },
+  { id: 'ufc', label: 'La jaula grande', desc: 'Peleaste en UFC. Ya sos más de lo que llega el 99%.', when: (s) => s.peakTier >= PRELIM },
+  { id: 'levanta', label: 'Se levantó', desc: 'Te tiraron al piso y ganaste igual. Eso no se entrena.', when: (s) => s.last?.result === 'win' && s.last.downs > 0 },
+  { id: 'guerra', label: 'Una guerra', desc: 'Quince minutos que la gente va a mirar de nuevo en YouTube.', when: (s) => s.last?.war },
+  { id: 'verdugo', label: 'Verdugo de rankeados', desc: 'Finalizaste a alguien del top 5 del mundo.', when: (s) => s.last?.result === 'win' && s.last.rank > 0 && s.last.rank <= 5 && (s.last.methodKey === 'ko' || s.last.methodKey === 'sub') },
+  { id: 'revancha', label: 'Cuenta saldada', desc: 'Le ganaste al que te había ganado. Eso no se lo saca nadie.', when: (s) => s.last?.avenged },
+  { id: 'invicto', label: 'Diez y cero', desc: 'Diez peleas, ninguna derrota.', when: (s) => s.fights.length >= 10 && s.record.l === 0 },
+  { id: 'finish10', label: 'Diez finalizaciones', desc: 'Diez peleas que no llegaron a las tarjetas.', when: (s) => s.methods.ko + s.methods.sub >= 10 },
+  { id: 'campeon', label: 'El cinturón', desc: 'Campeón del mundo de UFC.', when: (s) => s.titles >= 1 },
+  { id: 'defensa3', label: 'Un reinado', desc: 'El título y tres defensas. Esto ya es una era.', when: (s) => s.titles >= 4 },
+  { id: 'doble', label: 'Dos divisiones', desc: 'Campeón en dos categorías distintas. Un puñado de personas en la historia.', when: (s) => s.belts.length >= 2 },
+  { id: 'millon', label: 'El primer millón', desc: 'Un millón de dólares ganados peleando.', when: (s) => s.earned >= 1000000 },
+]

@@ -1,8 +1,23 @@
-# Copero UFC
+<div align="center">
 
-Simulador de carrera de peleador de MMA, en la línea del [simulador de carrera de Copero](https://www.copero.com.ar/juegos/simulador-carrera):
-elegís país, gimnasio, estilo base, categoría y dificultad, y en unos minutos de texto, decisiones y peleas
-round por round recorrés toda la carrera hasta un final compartible.
+# 🥊 Copero UFC
+
+**Simulador de carrera de peleador de MMA.** Elegís país, gimnasio, estilo, categoría y dificultad —
+y en unos minutos de texto, decisiones y peleas round por round recorrés toda la carrera
+hasta un final compartible.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vite.dev)
+[![Tests](https://img.shields.io/badge/tests-node%3Atest-339933?logo=node.js&logoColor=white)](src/sim.test.js)
+[![Dependencies](https://img.shields.io/badge/runtime%20deps-2-brightgreen.svg)](package.json)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-blueviolet.svg)](https://github.com/Martin-Ferreira-O/copero_ufc/pulls)
+
+En la línea del [simulador de carrera de Copero](https://www.copero.com.ar/juegos/simulador-carrera).
+
+</div>
+
+## Empezar
 
 ```bash
 npm install
@@ -10,11 +25,14 @@ npm run dev     # jugar
 npm test        # 2000 carreras autojugadas por dificultad + balance + regresiones
 ```
 
+> **Sin dependencias raras.** React, Vite y nada más: el motor entero (`src/sim.js`) es JavaScript plano
+> con un RNG sembrado propio, y los tests corren con el `node:test` que ya trae Node.
+
 ## Cómo está armado
 
-- `src/data.js` — **todo el contenido**: gimnasios, estilos, categorías, escalones, rivales, los ~42 eventos,
-  el catálogo de la tienda (`SHOP`), los 4 planes de round, las 3 dificultades, los textos de round y `TUNING`
-  (las perillas de balance).
+- `src/data.js` — **todo el contenido**: gimnasios, estilos, categorías, escalones, rivales, los ~47 eventos,
+  el catálogo de la tienda (`SHOP`), los 16 logros (`TROPHIES`), los 4 planes de round, las 3 dificultades,
+  los textos de round y `TUNING` (las perillas de balance).
 - `src/sim.js` — el motor: RNG sembrado, pelea round por round, ranking, lesiones, progresión, finales.
 - `src/App.jsx` — las tres pantallas (setup, carrera, card final) y la esquina interactiva.
 
@@ -38,6 +56,12 @@ caro; no hace falta un tope. Comprar no consume RNG: la carrera sigue siendo rep
 pelea (`slot: 'week'`) modifican **la pelea que sigue inmediatamente**; los de campamento (`slot: 'camp'`) mueven
 stats entre peleas. Los eventos que reaccionan a algo leen `s.last`, no agregados históricos: el evento del robo
 de los jueces sólo aparece si te robaron *esa* pelea.
+
+**Ganar te da la agencia.** Después de cada victoria en UFC, `offers(s)` abre el **callout**: elegís tu próxima
+pelea entre la que te ofrecen, un rival tres puestos arriba tuyo (con nombre y apellido, porque el top 15 es
+estable), la revancha contra el que te ganó, o una pelea con poco aviso que paga más y te saltea el campamento.
+Perdés y peleás contra el que te den: la agencia es el premio, no el default. Igual que la tienda, `offers` es una
+función pura de `s` y no consume RNG — elegir sólo deja flags, el rival lo sigue armando `buildOpponent`.
 
 **El jugador es la esquina.** La pelea no es una cinemática: antes de cada round elegís uno de los cuatro planes
 de `PLANS` y el motor resuelve ese round con tu elección. Presionar da más daño y comés más; boxear afuera gana
@@ -64,14 +88,15 @@ plata. Reparto de finales medido con 2000 carreras por dificultad **jugadas por 
 sigue lo que le sugiere la esquina); `npm test` lo imprime y aparte corre 400 carreras con planes al azar para que
 ninguna secuencia rara rompa el motor:
 
-| | campeón | retador | rankeado | cortado | retiro forzado | regional | nunca la pegó |
-|---|---|---|---|---|---|---|---|
-| Normal | 20% | 13% | 46% | 2% | 3% | 7% | 2% |
-| Difícil | 7% | 9% | 45% | 8% | 7% | 13% | 6% |
-| Realista | 1% | 2% | 31% | 9% | 13% | 19% | 19% |
+| | campeón | retador | rankeado | peleador UFC | cortado | retiro forzado | regional | nunca la pegó |
+|---|---|---|---|---|---|---|---|---|
+| Normal | 18% | 13% | 47% | 6% | 2% | 4% | 7% | 2% |
+| Difícil | 6% | 9% | 45% | 6% | 8% | 7% | 14% | 6% |
+| Realista | 1% | 2% | 31% | 6% | 9% | 13% | 19% | 20% |
 
-Son el **piso**: el bot del test nunca entra a la tienda. Un jugador que gasta la plata en el gimnasio correcto
-llega bastante más arriba, y esa diferencia es a propósito.
+Son el **piso**: el bot del test nunca entra a la tienda y en el callout siempre acepta la pelea que le
+ofrecen. Un jugador que gasta la plata en el gimnasio correcto y pide las peleas que le convienen llega
+bastante más arriba, y esa diferencia es a propósito.
 
 Los métodos caen cerca del deporte real: 54% decisión, 28% KO/TKO, 18% sumisión, 1% empate.
 
@@ -82,9 +107,35 @@ a 9%. Ahí está el juego: el scouting que te da el Fight IQ vale plata.
 La carrera es **reproducible por semilla**: misma semilla + mismas decisiones + mismos planes = misma carrera.
 La semilla aparece en la card final y en el texto que se copia.
 
+## Lo que devuelve la plata y lo que se colecciona
+
+Finalizar o pelear una guerra en UFC paga **bono de la noche** (`TUNING.bonusBase` + una parte de la bolsa;
+la guerra lo cobra aunque pierdas). Los **16 logros** de `TROPHIES` se chequean después de cada pelea, saltan
+una sola vez, van al historial y a la card final; su `when` tiene que ser puro, igual que el de los eventos.
+Siendo campeón con tres títulos aparece **subir de categoría**: entregás el cinturón, entrás #8 arriba y si lo
+ganás de nuevo el final es *doble campeón*.
+
+La carrera **se guarda sola** en `localStorage`: todo el estado del RNG es un entero (`s.rng.state()`), así que
+recargar la pestaña devuelve exactamente el mismo paso y la misma carrera. `pending` no se guarda — trae
+funciones — y `nextStep` lo regenera igual.
+
 ## Nota sobre nombres
 
 Usa marcas y peleadores reales (UFC, gimnasios, rivales rankeados; los seis nombres de cada categoría se mapean
 a los puestos #1 a #6 del ranking, así la pelea de título es contra el campeón de verdad). Es un juego de fans sin
 fines comerciales; si eso llegara a molestar a alguien, los nombres viven en `REAL_OPPONENTS` y `GYMS` dentro de
 `src/data.js` y se reemplazan editando dos arrays.
+
+## Contribuir
+
+El contenido es data, no código: eventos, rivales, ítems de tienda y logros son objetos en `src/data.js` y el
+motor no conoce ningún nombre propio. Agregá el objeto, corré `npm test` (los 2000 runs por dificultad avisan si
+rompiste el balance) y mandá el PR.
+
+## Licencia
+
+[MIT](LICENSE) para el código.
+
+Proyecto de fans, no oficial y sin fines comerciales: no está afiliado ni respaldado por UFC, Zuffa/TKO, ni por
+ninguno de los gimnasios, promotoras o peleadores nombrados. Las marcas son de sus respectivos dueños y se usan
+de forma descriptiva; la licencia MIT cubre el código, no las marcas.

@@ -15,17 +15,23 @@ import {
   REAL_OPPONENTS,
   randomOpponentName,
   EVENTS,
+  TROPHIES,
 } from './data.js'
 
 // RNG sembrado: misma semilla + mismas decisiones = misma carrera. Es lo que hace compartible el resultado.
 export function mulberry32(seed) {
   let a = seed >>> 0
-  return function () {
+  const next = function () {
     a = (a + 0x6d2b79f5) >>> 0
     let t = Math.imul(a ^ (a >>> 15), 1 | a)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+  // Todo el estado del generador es el entero `a`. Exponerlo es lo que hace serializable a
+  // la carrera entera: guardar es JSON.stringify({...s, rng: s.rng.state()}) y cargar es
+  // mulberry32(guardado). Sin esto no se puede guardar sin romper la reproducibilidad.
+  next.state = () => a
+  return next
 }
 
 const pick = (arr, rng) => arr[Math.floor(rng() * arr.length)]
@@ -65,6 +71,8 @@ export function newCareer({ name, nickname, country, gym, style, weight, stance,
     record: { w: 0, l: 0, d: 0 },
     methods: { ko: 0, sub: 0, dec: 0, koAgainst: 0 },
     titles: 0,
+    belts: [], // en qué categorías fuiste campeón: dos = doble campeón
+    trophies: [], // ids de TROPHIES ya desbloqueados
     streak: 0,
     lossStreak: 0,
     tier: 'amateur',
@@ -129,6 +137,71 @@ export function buy(s, item) {
   return text
 }
 
+// ── el callout ────────────────────────────────────────────────────────────────
+// Después de ganar en UFC elegís tu próxima pelea. La agencia es el premio por ganar:
+// perdés y peleás contra el que te den.
+//
+// Es una función PURA de `s`, igual que `stakes` y `catalog`: no toca s.rng. Por eso puede
+// nombrar al rival del top 15 (rankedName es determinista) pero no al rival sin ranking, que
+// sale del RNG recién en el paso de pelea. Elegir sólo deja flags; el rival lo sigue armando
+// `buildOpponent` como siempre.
+export function offers(s) {
+  if (s.last?.result !== 'win') return null
+  if (!isUFC(s.tier) || s.tier === 'title' || s.tier === 'champ') return null
+
+  const out = [{ id: 'normal', label: 'Aceptar la que te ofrecen', fx: 'el rival que te toca', taken: 'Firmás lo que te pusieron adelante.', apply: () => {} }]
+
+  const target = s.rank ? Math.max(1, s.rank - 3) : null
+  if (!s.rank || s.rank > 1)
+    out.push({
+      id: 'arriba',
+      label: target ? `Pedir a ${rankedName(s, target)} (#${target})` : 'Pedir un rival muy arriba tuyo',
+      fx: `rival bastante mejor · +${TUNING.hypeCallout} hype si ganás`,
+      taken: target ? `Lo nombraste en una nota y aceptó. Vas contra el #${target}.` : 'Pediste a alguien que no te corresponde. Te lo dieron.',
+      apply: (st) => {
+        if (target) st.flags.stepRank = target
+        else st.flags.stepUp = true
+      },
+    })
+
+  const rival = s.rivals.find((r) => r.beatMe)
+  if (rival)
+    out.push({
+      id: 'revancha',
+      label: `Llamar a ${rival.name}`,
+      fx: 'la revancha · te tiene estudiado',
+      taken: `${rival.name} aceptó la revancha. Un año pensando en esto.`,
+      apply: (st) => {
+        st.nextOpponent = rival
+      },
+    })
+
+  const quick = Math.round(tierOf(s).pay * diffOf(s).pay * 0.4)
+  out.push({
+    id: 'aviso',
+    label: 'Tomar una pelea con poco aviso',
+    fx: `+US$ ${quick.toLocaleString('es-AR')} ahora · sin campamento y rival mejor`,
+    taken: `Se cayó alguien de la cartelera y sonó tu teléfono. Cobrás US$ ${quick.toLocaleString('es-AR')} extra por decir que sí en dos semanas.`,
+    apply: (st) => {
+      st.flags.shortNotice = true
+      st.money += quick
+      st.earned += quick
+    },
+  })
+
+  return out
+}
+
+export function takeOffer(s, list, i) {
+  const o = list[i]
+  o.apply(s)
+  s.log.push({ kind: 'note', text: o.taken })
+  s.pending = null
+  // Poco aviso significa poco aviso: te saltás el campamento y vas derecho a la semana de pelea.
+  s.phase = o.id === 'aviso' ? 'week' : 'camp'
+  return o.taken
+}
+
 // ── rivales ───────────────────────────────────────────────────────────────────
 // El top 15 tiene nombres estables dentro de una carrera: el #7 es siempre el mismo #7.
 // Los seis primeros son los rankeados de verdad, así la pelea de título es contra el campeón.
@@ -143,6 +216,7 @@ export function buildOpponent(s) {
   let level = t.oppLevel + diffOf(s).oppLevel
   if (s.flags.shortNotice) level += 1.1
   if (s.flags.easyOpp) level -= 1.2
+  if (s.flags.stepUp) level += 1.0 // pediste esta pelea y no te corresponde
 
   // Un solo pick de estilo: la forma de los stats y el estilo que ves antes de pelear
   // tienen que ser la misma cosa, si no el scouting es mentira.
@@ -168,7 +242,8 @@ export function buildOpponent(s) {
     name = rankedName(s, oppRank)
     real = oppRank <= (REAL_OPPONENTS[s.weight] || []).length
   } else if (s.rank) {
-    oppRank = clamp(s.rank + Math.floor(rng() * 7) - 3, 1, 15)
+    // El callout promete un puesto concreto en el botón: acá se cumple al pie de la letra.
+    oppRank = s.flags.stepRank ? clamp(s.flags.stepRank, 1, 15) : clamp(s.rank + Math.floor(rng() * 7) - 3, 1, 15)
     name = rankedName(s, oppRank)
     real = oppRank <= (REAL_OPPONENTS[s.weight] || []).length
     level = 7.9 + (16 - oppRank) * 0.055 + diffOf(s).oppLevel
@@ -530,6 +605,7 @@ export function stakes(s) {
   if (s.flags.badCut && !s.flags.nutri) out.push({ tone: 'bad', text: 'Entrás vacío por el corte de peso' })
   if (s.flags.prep) out.push({ tone: 'good', text: `+0.6 ${s.flags.prep} por lo que afilaste esta semana` })
   if (s.flags.shortNotice) out.push({ tone: 'bad', text: 'Sin campamento y contra alguien mejor' })
+  if (s.flags.stepUp || s.flags.stepRank) out.push({ tone: 'good', text: `Esta pelea la pediste vos: +${TUNING.hypeCallout} de hype si ganás` })
   if (s.flags.easyOpp) out.push({ tone: 'info', text: 'Reemplazo peor rankeado' })
   if (s.nextOpponent) out.push({ tone: 'info', text: 'Revancha: ya sabe cómo peleás' })
   return out
@@ -561,11 +637,13 @@ export function applyFight(s, fight, opponent) {
   const lost = fight.result === 'loss'
   const finished = fight.methodKey === 'ko' || fight.methodKey === 'sub'
 
+  const calledOut = !!(s.flags.stepUp || s.flags.stepRank)
+
   if (won) {
     s.record.w++
     s.streak++
     s.lossStreak = 0
-    s.hype = clamp(s.hype + TUNING.hypeWin + (finished ? TUNING.hypeFinish : 0) + (isUFC(s.tier) ? 4 : 0), 0, 100)
+    s.hype = clamp(s.hype + TUNING.hypeWin + (finished ? TUNING.hypeFinish : 0) + (isUFC(s.tier) ? 4 : 0) + (calledOut ? TUNING.hypeCallout : 0), 0, 100)
     s.tierWins++
   } else if (lost) {
     s.record.l++
@@ -585,10 +663,23 @@ export function applyFight(s, fight, opponent) {
   // La carrera cuesta plata: gimnasio, equipo, viajes. Sin esto el dinero sólo sube y elegir es gratis.
   s.money = Math.max(0, s.money - Math.round(t.pay * d.pay * 0.18 + 900))
 
+  // El bono de la noche: la plata que no estaba en el contrato. La guerra lo paga aunque
+  // pierdas — es lo que hace la UFC y es lo que hace que valga la pena no correr.
+  const bonusKind = fight.war ? 'Pelea de la Noche' : won && finished ? 'Actuación de la Noche' : null
+  if (isUFC(s.tier) && bonusKind) {
+    const bonus = Math.round((TUNING.bonusBase + t.pay * TUNING.bonusShare) * d.pay)
+    s.money += bonus
+    s.earned += bonus
+    note(`${bonusKind}: US$ ${bonus.toLocaleString('es-AR')} de bono. Esa plata no estaba en el contrato.`)
+  }
+
   if (s.methods[fight.methodKey] !== undefined) s.methods[fight.methodKey]++
 
   s.tierFights++
   s.age += TUNING.yearsPerFight
+
+  // se lee ANTES de limpiar los rivales, si no el logro nunca se entera
+  const avenged = won && s.rivals.some((r) => r.name === opponent.name && r.beatMe)
 
   if (wasRematch && won) note(`Le devolviste la derrota a ${opponent.name}. Eso no se lo saca nadie.`)
   if (wasRematch && won) s.hype = clamp(s.hype + 6, 0, 100)
@@ -601,6 +692,8 @@ export function applyFight(s, fight, opponent) {
   delete s.flags.shortNotice
   delete s.flags.easyOpp
   delete s.flags.prep
+  delete s.flags.stepUp
+  delete s.flags.stepRank
   if (s.flags.nutri && --s.flags.nutri <= 0) delete s.flags.nutri
   s.nextOpponent = null
 
@@ -616,14 +709,22 @@ export function applyFight(s, fight, opponent) {
     downs: fight.a.downs,
     opponent: opponent.name,
     rank: opponent.rank,
+    avenged,
   }
 
   grow(s, fight)
   advance(s, fight, note)
   s.pending = null
-  s.phase = 'camp'
+  s.phase = 'offers'
   s.peakTier = Math.max(s.peakTier, tierIndex(s.tier))
   if (s.rank) s.peakRank = Math.min(s.peakRank ?? 99, s.rank)
+  // Los logros van último: leen el estado ya cerrado, incluidos ascenso y cinturón.
+  for (const tr of TROPHIES) {
+    if (s.trophies.includes(tr.id) || !tr.when(s)) continue
+    s.trophies.push(tr.id)
+    s.log.push({ kind: 'trophy', label: tr.label, desc: tr.desc })
+    notes.push(`🏅 ${tr.label} — ${tr.desc}`)
+  }
   return notes
 }
 
@@ -667,7 +768,12 @@ function advance(s, fight, note) {
     if (won) {
       toTier('champ')
       s.titles++
-      note('¡Campeón del mundo! Te ponen el cinturón en la cintura y no te entra en la cabeza.')
+      if (!s.belts.includes(s.weight)) s.belts.push(s.weight)
+      note(
+        s.belts.length >= 2
+          ? '¡Campeón en dos categorías! Un puñado de personas en la historia del deporte hizo esto.'
+          : '¡Campeón del mundo! Te ponen el cinturón en la cintura y no te entra en la cabeza.'
+      )
     } else if (lost) {
       toTier('ranked', 3)
       note('Perdiste la pelea de tu vida. Hay que volver a subir.')
@@ -728,6 +834,11 @@ function end(s, ending, text) {
 export function nextStep(s) {
   if (s.over) return { kind: 'end' }
   if (s.pending) return s.pending
+  if (s.phase === 'offers') {
+    const list = offers(s)
+    if (list) return (s.pending = { kind: 'offers', offers: list })
+    s.phase = 'camp'
+  }
   if (s.phase === 'camp') {
     const e = pickEvent(s, 'camp')
     if (e) return (s.pending = { kind: 'event', event: e, slot: 'camp' })
@@ -743,6 +854,8 @@ export function nextStep(s) {
 
 // ── final ─────────────────────────────────────────────────────────────────────
 export function grade(s) {
+  if (s.belts.length >= 2)
+    return { title: 'Doble campeón', desc: 'Ganaste el cinturón en dos categorías distintas. En toda la historia del deporte eso lo hizo un puñado de personas.' }
   if (s.titles >= 3) return { title: 'Leyenda', desc: 'Vas a estar en el Salón de la Fama y en la remera de un pibe que todavía no nació.' }
   if (s.titles >= 1) return { title: 'Campeón de UFC', desc: 'Llegaste a lo más alto del deporte. Poca gente en la historia puede decir lo mismo.' }
   if (s.peakTier >= tierIndex('title')) return { title: 'Retador al título', desc: 'Peleaste por el cinturón. Te quedaste a un round de la gloria.' }
@@ -776,7 +889,9 @@ export function summaryText(s) {
     `${w.name} · ${STYLES[s.style].name} · ${s.gym} · ${diffOf(s).name}`,
     `Récord: ${s.record.w}-${s.record.l}-${s.record.d} (${finishes} finalizaciones)`,
     s.titles ? `🏆 Campeón de UFC · ${s.titles} ${s.titles === 1 ? 'título/defensa' : 'títulos y defensas'}` : null,
+    s.belts.length >= 2 ? `🥇🥇 Campeón en ${s.belts.map((id) => WEIGHT_CLASSES.find((w) => w.id === id).name).join(' y ')}` : null,
     best.length ? `Le ganó a: ${best.join(', ')}` : null,
+    s.trophies.length ? `🏅 ${s.trophies.length}/${TROPHIES.length} logros` : null,
     `Ganó US$ ${s.earned.toLocaleString('es-AR')} en toda la carrera`,
     `Final: ${g.title} — ${g.desc}`,
     `Semilla: ${s.seed}`,

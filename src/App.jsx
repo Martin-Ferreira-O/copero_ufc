@@ -14,13 +14,16 @@ import {
   PLAN_IDS,
   SHOP_GROUPS,
   SOFT_CAP,
+  TROPHIES,
   catalog,
   gymsOf,
 } from './data.js'
 import {
+  mulberry32,
   newCareer,
   nextStep,
   applyOption,
+  takeOffer,
   buy,
   eventText,
   openFight,
@@ -55,13 +58,51 @@ const hashSeed = (str) => {
   return h
 }
 
+const ovrOf = (eff) => Math.round((STATS.reduce((n, k) => n + eff[k], 0) / STATS.length) * 10)
+
+// ── guardado ──────────────────────────────────────────────────────────────────
+// Perder treinta peleas por cerrar una pestaña es la peor forma de terminar una carrera.
+// `s` es serializable entero salvo dos cosas: el RNG (que guarda su estado en un número) y
+// `pending`, que trae el objeto de evento con funciones. `pending` no se guarda: nextStep lo
+// regenera, y como el estado del RNG vuelve igual, regenera exactamente el mismo paso.
+const KEY = 'copero-ufc-carrera'
+
+const save = (s) => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ ...s, rng: s.rng.state(), pending: null }))
+  } catch {
+    // ponytail: sin cuota o sin localStorage se juega igual, sólo que sin guardar.
+  }
+}
+
+const load = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY))
+    if (!s?.stats || typeof s.rng !== 'number') return null
+    s.rng = mulberry32(s.rng)
+    s.pending = null
+    return s
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
-  const [career, setCareer] = useState(null)
+  const [career, setCareer] = useState(load)
   const [, force] = useState(0)
   const rerender = () => force((n) => n + 1)
 
+  // sin deps a propósito: el motor muta `career` en su lugar, así que el único momento
+  // fiable para guardar es después de cada render.
+  useEffect(() => {
+    if (career) save(career)
+  })
+
   const screen = !career ? 'setup' : career.over ? 'end' : 'career'
-  const restart = () => setCareer(null)
+  const restart = () => {
+    localStorage.removeItem(KEY)
+    setCareer(null)
+  }
 
   return (
     <div className="app" data-tier={screen === 'career' ? career.tier : 'amateur'}>
@@ -366,9 +407,15 @@ export function Career({ s, rerender, onRestart }) {
     advance()
   }
 
+  const pickOffer = (i) => {
+    takeOffer(s, step.offers, i)
+    advance()
+  }
+
   const idx = LADDER.findIndex((t) => t.id === s.tier)
   const { line, bump } = useDeltas(s)
   const eff = effStats(s)
+  const ovr = ovrOf(eff)
   const risks = stakes(s)
   const danger = risks.find((r) => r.danger)
 
@@ -395,7 +442,12 @@ export function Career({ s, rerender, onRestart }) {
                 <br />
                 profesional
               </small>
+              <span className="ovr" key={`ovr${ovr}`}>
+                <b>{ovr}</b>
+                <small>general</small>
+              </span>
             </div>
+            {s.streak >= 2 && <div className="streak">🔥 {s.streak} al hilo</div>}
           </div>
           {danger && <div className="danger">⚠ {danger.danger}</div>}
           {line && (
@@ -465,6 +517,28 @@ export function Career({ s, rerender, onRestart }) {
                   </button>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {!inCage && step.kind === 'offers' && (
+          <div className="beat event callout">
+            <p className="kicker dot">elegís vos</p>
+            <h3>Ganaste: ahora te escuchan</h3>
+            <p className="body">
+              El teléfono suena antes de que se te baje la hinchazón. Hay más de una pelea sobre la mesa y por una vez la decisión es tuya.
+            </p>
+            <div className="options">
+              {step.offers.map((o, i) => (
+                <button key={o.id} onClick={() => pickOffer(i)}>
+                  <b>{LETTERS[i]}</b>
+                  <span className="oLabel">
+                    {o.label}
+                    <small className="fx">{o.fx}</small>
+                  </span>
+                  <span className="chev">▸</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -544,7 +618,11 @@ export function Career({ s, rerender, onRestart }) {
           </div>
         </div>
 
-        <button className="reset" onClick={onRestart}>
+        {/* ponytail: confirm() nativo — el guardado automático hace esto irreversible */}
+        <button
+          className="reset"
+          onClick={() => confirm('Se borra la carrera guardada. ¿Reiniciar?') && onRestart()}
+        >
           Reiniciar carrera
         </button>
       </div>
@@ -574,7 +652,7 @@ function useDeltas(s) {
   const [bump, setBump] = useState(false)
 
   useEffect(() => {
-    const now = { ...s.stats, hype: s.hype, w: s.record.w, l: s.record.l }
+    const now = { ...s.stats, hype: s.hype, w: s.record.w, l: s.record.l, ovr: ovrOf(effStats(s)) }
     const before = prev.current
     prev.current = now
     if (!before) return
@@ -586,6 +664,8 @@ function useDeltas(s) {
     }
     const dh = Math.round(now.hype - before.hype)
     if (dh) out.push(`Hype ${dh > 0 ? '+' : '−'}${Math.abs(dh)}`)
+    const dv = now.ovr - before.ovr
+    if (dv) out.push(`General ${dv > 0 ? '+' : '−'}${Math.abs(dv)}`)
     const rec = now.w !== before.w || now.l !== before.l
     if (rec) out.push(`Récord ${s.record.w}-${s.record.l}-${s.record.d}`)
     if (!out.length) return
@@ -604,6 +684,17 @@ function useDeltas(s) {
 }
 
 function LogEntry({ entry }) {
+  if (entry.kind === 'trophy')
+    return (
+      <div className="beat trophy">
+        <span className="medal">🏅</span>
+        <span>
+          <b>{entry.label}</b>
+          <em>{entry.desc}</em>
+        </span>
+      </div>
+    )
+
   if (entry.kind === 'note')
     return (
       <div className="beat note">
@@ -908,6 +999,7 @@ export function End({ s, onRestart }) {
             <Tile n={s.titles} label="títulos y defensas" />
             <Tile n={s.peakRank ? `#${s.peakRank}` : '—'} label="mejor ranking" />
             <Tile n={`US$ ${usd(s.earned)}`} label="ganado" />
+            <Tile n={`${s.trophies.length}/${TROPHIES.length}`} label="logros" />
           </div>
         </div>
 
@@ -916,6 +1008,15 @@ export function End({ s, onRestart }) {
           {s.endingText && <p className="desc soft">{s.endingText}</p>}
           <p className="desc soft">{afterlife(s)}</p>
           {bigWins.length > 0 && <p className="desc gold">Le ganó a: {bigWins.join(', ')}</p>}
+          {s.trophies.length > 0 && (
+            <div className="medals">
+              {TROPHIES.filter((t) => s.trophies.includes(t.id)).map((t) => (
+                <span key={t.id} title={t.desc}>
+                  🏅 {t.label}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="moments">
             {s.log
               .filter((e) => e.kind === 'note')
