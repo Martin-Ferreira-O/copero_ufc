@@ -745,8 +745,9 @@ function Shop({ s, rerender, onClose }) {
   }
 
   // ponytail: portal a body por lo mismo que FightPanel — .screen anima transform.
+  // data-tier viaja con el portal: afuera de .app la paleta del escalón no existe.
   return createPortal(
-    <div className="fightOverlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fightOverlay" data-tier={s.tier} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="fightBox shopBox">
         <div className="shopHead">
           <div>
@@ -840,7 +841,7 @@ function FightPanel({ s, opponent, onDone }) {
   // ponytail: portal a body — dentro de .screen (que anima transform) el fixed
   // se ancla al ancestro y la jaula queda centrada en la página, no en la pantalla.
   return createPortal(
-    <div className="fightOverlay">
+    <div className="fightOverlay" data-tier={s.tier}>
       <div className="fightBox">
         {phase === 'reveal' && <span className="flash bell" key={shown.length} />}
         {phase === 'done' && ko && <span className={`flash ko ${f.result}`} />}

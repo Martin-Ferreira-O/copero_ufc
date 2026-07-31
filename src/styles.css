@@ -24,6 +24,14 @@
 
   --max: 1280px;
   --pad: 28px;
+
+  /* El aire lateral nunca puede ser menor que el notch: en un teléfono acostado
+     la muesca se come el texto si el padding no lo tiene en cuenta. */
+  --safeL: env(safe-area-inset-left, 0px);
+  --safeR: env(safe-area-inset-right, 0px);
+  --safeB: env(safe-area-inset-bottom, 0px);
+  --padL: max(var(--pad), var(--safeL));
+  --padR: max(var(--pad), var(--safeR));
 }
 
 * {
@@ -37,6 +45,9 @@ body {
   font: 15px/1.45 var(--sans);
   -webkit-font-smoothing: antialiased;
   text-wrap: pretty;
+  /* Safari en horizontal infla los cuerpos de texto por su cuenta y rompe cada
+     grilla calculada en px. */
+  -webkit-text-size-adjust: 100%;
 }
 
 button {
@@ -45,6 +56,7 @@ button {
   cursor: pointer;
   border: 0;
   background: none;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.07);
 }
 
 input,
@@ -78,8 +90,10 @@ select {
 }
 
 /* ── la piel por escalón ─────────────────────────────────────────────────────
-   Único lugar donde vive la dirección de arte: el resto del CSS lee las vars. */
-.app {
+   Único lugar donde vive la dirección de arte: el resto del CSS lee las vars.
+   Van colgadas de [data-tier] y no de .app porque la jaula y la tienda salen por
+   portal a <body>: adentro de .app no estarían y se quedarían sin paleta. */
+[data-tier] {
   --act: var(--red);
   --actOn: #fff;
   --a: var(--red);
@@ -89,50 +103,55 @@ select {
   --glare: 0;
   --grain: 0.07;
   --vig: radial-gradient(80% 34% at 50% 0%, rgba(211, 28, 38, 0.11), rgba(0, 0, 0, 0) 60%);
-  min-height: 100vh;
-  background: #09090b;
+  --bg: #09090b;
 }
 
-.app[data-tier='amateur'] {
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+[data-tier='amateur'] {
   --act: #c4342c;
   --a: #9fc0a8;
   --aOn: #0a0f0b;
   --rule: #1f2723;
   --glare: 1;
   --vig: radial-gradient(90% 40% at 50% 0%, rgba(190, 230, 200, 0.09), rgba(0, 0, 0, 0) 62%);
-  background: #0a0c0b;
+  --bg: #0a0c0b;
 }
-.app[data-tier='regional'] {
+[data-tier='regional'] {
   --act: #e0552c;
   --actOn: #170805;
   --a: #e0552c;
   --aOn: #170805;
   --rule: #2c1e18;
   --vig: radial-gradient(70% 38% at 50% 0%, rgba(255, 140, 60, 0.14), rgba(0, 0, 0, 0) 66%);
-  background: #100b09;
+  --bg: #100b09;
 }
-.app[data-tier='dwcs'] {
+[data-tier='dwcs'] {
   --act: #3d7bf0;
   --a: #3d7bf0;
   --aOn: #04070f;
   --rule: #182338;
   --scan: 0.5;
   --vig: radial-gradient(80% 36% at 50% 0%, rgba(60, 120, 240, 0.13), rgba(0, 0, 0, 0) 64%);
-  background: #080b11;
+  --bg: #080b11;
 }
-.app[data-tier='prelim'] {
+[data-tier='prelim'] {
   --scan: 0.6;
-  background: #09090b;
+  --bg: #09090b;
 }
-.app[data-tier='maincard'] {
+[data-tier='maincard'] {
   --act: #ff3038;
   --a: #ff3038;
   --rule: #2b2328;
   --scan: 0.6;
   --vig: radial-gradient(85% 40% at 50% 0%, rgba(255, 48, 56, 0.14), rgba(0, 0, 0, 0) 62%);
-  background: #0a0809;
+  --bg: #0a0809;
 }
-.app[data-tier='ranked'] {
+[data-tier='ranked'] {
   --act: #f2f0f4;
   --actOn: #0a0a0c;
   --a: #f2f0f4;
@@ -140,9 +159,9 @@ select {
   --rule: #2e2e35;
   --scan: 0.45;
   --vig: radial-gradient(90% 44% at 50% 0%, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0) 60%);
-  background: #0b0b0d;
+  --bg: #0b0b0d;
 }
-.app[data-tier='title'] {
+[data-tier='title'] {
   --act: var(--gold);
   --actOn: #171003;
   --a: var(--gold);
@@ -150,9 +169,9 @@ select {
   --rule: #34290f;
   --scan: 0.3;
   --vig: radial-gradient(95% 48% at 50% 0%, rgba(232, 182, 76, 0.17), rgba(0, 0, 0, 0) 64%);
-  background: #0e0b05;
+  --bg: #0e0b05;
 }
-.app[data-tier='champ'] {
+[data-tier='champ'] {
   --act: #f5cf6b;
   --actOn: #171003;
   --a: #f5cf6b;
@@ -160,7 +179,7 @@ select {
   --rule: #3d3013;
   --scan: 0.28;
   --vig: radial-gradient(100% 55% at 50% 0%, rgba(245, 207, 107, 0.2), rgba(0, 0, 0, 0) 66%);
-  background: #100c04;
+  --bg: #100c04;
 }
 
 .skin > * {
@@ -198,7 +217,7 @@ select {
   border-top: 1px solid var(--l1);
   max-width: var(--max);
   margin: 0 auto;
-  padding: 18px var(--pad) 26px;
+  padding: 18px var(--padR) calc(26px + var(--safeB)) var(--padL);
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -214,7 +233,7 @@ select {
 .wrap {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 0 var(--pad);
+  padding: 0 var(--padR) 0 var(--padL);
 }
 
 /* rótulos numerados */
@@ -335,7 +354,8 @@ h2.loose::after {
 
 .panels {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  /* el min() evita que la columna sea más ancha que la pantalla y empuje scroll horizontal */
+  grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
   gap: 1px;
   background: var(--l2);
   border-left: 1px solid var(--l2);
@@ -396,8 +416,10 @@ input.big.gold:focus {
   border: 1px solid var(--l4);
   font-size: 17px;
 }
-.withBtn button:hover {
-  border-color: var(--red);
+@media (hover: hover) {
+  .withBtn button:hover {
+    border-color: var(--red);
+  }
 }
 .ageNum {
   font-family: var(--cd);
@@ -494,8 +516,10 @@ input.bad {
   display: grid;
   gap: 4px;
 }
-.list .row:hover {
-  background: #141519;
+@media (hover: hover) {
+  .list .row:hover {
+    background: #141519;
+  }
 }
 .list .row.on {
   background: #1a1113;
@@ -563,8 +587,10 @@ input.bad {
   gap: 3px;
   align-content: start;
 }
-.cell:hover {
-  background: #141519;
+@media (hover: hover) {
+  .cell:hover {
+    background: #141519;
+  }
 }
 .cell.on {
   background: #1a1113;
@@ -589,7 +615,7 @@ input.bad {
 
 .strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
   gap: 1px;
   background: var(--l3);
   border: 1px solid var(--l3);
@@ -605,8 +631,10 @@ input.bad {
   font-size: 19px;
   text-transform: uppercase;
 }
-.strip button:hover {
-  background: #141519;
+@media (hover: hover) {
+  .strip button:hover {
+    background: #141519;
+  }
 }
 .strip button.on {
   background: #1a1113;
@@ -628,11 +656,13 @@ input.bad {
   border-top: 1px solid var(--l3);
   background: rgba(8, 8, 10, 0.95);
   backdrop-filter: blur(12px);
+  /* el fondo llega hasta abajo de todo; el contenido se queda arriba de la barra del sistema */
+  padding-bottom: var(--safeB);
 }
 .startInner {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 14px var(--pad);
+  padding: 14px var(--padR) 14px var(--padL);
   display: flex;
   align-items: center;
   gap: 24px;
@@ -699,8 +729,10 @@ input.bad {
   align-items: center;
   gap: 16px;
 }
-.go:hover {
-  background: #ef2a34;
+@media (hover: hover) {
+  .go:hover {
+    background: #ef2a34;
+  }
 }
 .go:active {
   transform: translateY(1px);
@@ -713,7 +745,7 @@ input.bad {
 .career {
   max-width: var(--max);
   margin: 0 auto;
-  padding: 22px var(--pad) 60px;
+  padding: 22px var(--padR) calc(60px + var(--safeB)) var(--padL);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 20px;
@@ -725,7 +757,7 @@ input.bad {
   min-width: 0;
 }
 .rail.right {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
 }
 .center {
   display: grid;
@@ -1054,9 +1086,11 @@ input.bad {
   text-transform: uppercase;
   color: var(--dim3);
 }
-.reset:hover {
-  border-color: var(--red);
-  color: var(--txt);
+@media (hover: hover) {
+  .reset:hover {
+    border-color: var(--red);
+    color: var(--txt);
+  }
 }
 
 /* beats del centro */
@@ -1101,8 +1135,10 @@ input.bad {
   font-size: 14.5px;
   line-height: 1.4;
 }
-.options button:hover {
-  background: #1c2027;
+@media (hover: hover) {
+  .options button:hover {
+    background: #1c2027;
+  }
 }
 .options button:active {
   transform: translateY(1px);
@@ -1111,8 +1147,10 @@ input.bad {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.options button:disabled:hover {
-  background: #14171b;
+@media (hover: hover) {
+  .options button:disabled:hover {
+    background: #14171b;
+  }
 }
 .oLabel {
   min-width: 0;
@@ -1270,9 +1308,11 @@ input.bad {
   text-transform: uppercase;
   cursor: pointer;
 }
-.histMore:hover {
-  color: var(--txt2);
-  border-color: var(--l3);
+@media (hover: hover) {
+  .histMore:hover {
+    color: var(--txt2);
+    border-color: var(--l3);
+  }
 }
 /* El renglón más nuevo queda primero, así que basta animar al primer hijo.
    ponytail: sin escalonado por entrada — un selector en vez de índices en JS. */
@@ -1374,14 +1414,16 @@ input.bad {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: max(24px, var(--safeL)) max(24px, var(--safeR)) max(24px, var(--safeB)) max(24px, var(--safeL));
   animation: wipe 0.32s cubic-bezier(0.3, 0.9, 0.2, 1) both;
 }
 .fightBox {
   position: relative;
   width: 100%;
   max-width: 1020px;
-  max-height: 90vh;
+  /* 100% del hueco que deja el padding: en el teléfono `90vh` se pasaba de largo
+     (la barra del navegador no entra en `vh`) y la esquina quedaba abajo del borde. */
+  max-height: 100%;
   border: 1px solid var(--rule);
   background: #07070a;
   display: flex;
@@ -1511,12 +1553,16 @@ input.bad {
 .rounds {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
   margin: 0;
   padding: 22px 24px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  /* centrado, pero cuando desborda gana el scroll: con `center` a secas el primer
+     round se va para arriba y no hay forma de llegar a él. */
+  justify-content: safe center;
   gap: 15px;
   min-height: 260px;
 }
@@ -1588,9 +1634,11 @@ input.bad {
   text-transform: uppercase;
   color: var(--txt2);
 }
-.shopBtn:hover {
-  border-color: var(--act);
-  color: var(--txt);
+@media (hover: hover) {
+  .shopBtn:hover {
+    border-color: var(--act);
+    color: var(--txt);
+  }
 }
 .shopBox {
   max-width: 720px;
@@ -1618,6 +1666,12 @@ input.bad {
   line-height: 1;
   color: var(--gold);
   font-weight: normal;
+}
+/* el aviso del cap es hijo directo del panel: sin esto el texto arranca pegado al borde */
+.shopBox > .hint {
+  flex: none;
+  margin: 0;
+  padding: 12px 24px 0;
 }
 .shopNote {
   flex: none;
@@ -1765,7 +1819,7 @@ input.bad {
 .end {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 32px var(--pad) 60px;
+  padding: 32px var(--padR) calc(60px + var(--safeB)) var(--padL);
 }
 .finalCard {
   position: relative;
@@ -1972,16 +2026,20 @@ input.bad {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.endActions button:hover {
-  background: #ef2a34;
+@media (hover: hover) {
+  .endActions button:hover {
+    background: #ef2a34;
+  }
 }
 .endActions .ghost {
   background: none;
   border: 1px solid var(--l4);
 }
-.endActions .ghost:hover {
-  background: none;
-  border-color: var(--red);
+@media (hover: hover) {
+  .endActions .ghost:hover {
+    background: none;
+    border-color: var(--red);
+  }
 }
 .share {
   margin: 20px 0 0;
@@ -2198,5 +2256,492 @@ input.bad {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── el teléfono ──────────────────────────────────────────────────────────────
+   Todo lo de acá abajo existe por una razón sola: que en un celular se pueda
+   jugar. Menos aire muerto, menos columnas, y la decisión siempre a mano. */
+
+/* Mientras la carrera es una sola columna, la ficha no puede tapar la decisión:
+   nombre y récord arriba, el evento inmediatamente después, y los tableros abajo. */
+@media (max-width: 759px) {
+  .rail.left {
+    display: contents;
+  }
+  .idCard {
+    order: 1;
+  }
+  .center {
+    order: 2;
+  }
+  .rail.left > .box {
+    order: 3;
+  }
+  .rail.right {
+    order: 4;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --pad: 20px;
+  }
+}
+
+@media (max-width: 620px) {
+  :root {
+    --pad: 14px;
+  }
+
+  /* setup */
+  .hero {
+    padding: 26px 0 20px;
+  }
+  .hero h1 {
+    font-size: clamp(44px, 14.5vw, 92px);
+  }
+  .heroStats {
+    gap: 18px;
+    margin-top: 14px;
+  }
+  .heroStats b {
+    font-size: 24px;
+  }
+  .panel {
+    padding: 16px 14px 20px;
+  }
+  .panel h2 {
+    margin-bottom: 14px;
+  }
+  h2.loose {
+    padding: 22px 0 12px;
+  }
+  .fields {
+    gap: 16px;
+  }
+  input.big {
+    font-size: 24px;
+  }
+  input.big.gold {
+    font-size: 22px;
+  }
+  input[type='range'] {
+    height: 34px;
+  }
+  .list .row {
+    padding: 11px 12px;
+  }
+  .list .head strong {
+    font-size: 18px;
+  }
+  .cell {
+    padding: 10px;
+  }
+  .strip button {
+    min-height: 48px;
+    padding: 0 12px;
+    font-size: 18px;
+  }
+
+  /* La barra de arranque se comía media pantalla apilada: nombre arriba, y
+     semilla + botón compartiendo el renglón de abajo. */
+  .startBar {
+    margin-top: 22px;
+  }
+  .startInner {
+    gap: 8px 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .startInner .who {
+    flex: 1 1 100%;
+  }
+  .startInner .line1 {
+    font-size: 20px;
+  }
+  .field.seed {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  /* menos de 16px y iOS hace zoom solo al enfocar, y ya no vuelve */
+  .field.seed input {
+    font-size: 16px;
+    padding: 8px 2px;
+  }
+  .go {
+    flex: none;
+    min-height: 48px;
+    padding: 0 16px;
+    font-size: 21px;
+    gap: 8px;
+  }
+  .go .chev {
+    font-size: 15px;
+  }
+
+  /* carrera */
+  .career {
+    padding-top: 14px;
+    gap: 14px;
+  }
+  .idBody {
+    padding: 12px;
+  }
+  .fname {
+    font-size: 34px;
+  }
+  .fnick {
+    font-size: 20px;
+  }
+  .recRow b {
+    font-size: 46px;
+  }
+  .recRow .ovr b {
+    font-size: 28px;
+  }
+  .box {
+    padding: 12px;
+  }
+  .stat {
+    grid-template-columns: 58px minmax(0, 1fr) 24px;
+    gap: 7px;
+  }
+  .tile b {
+    font-size: 22px;
+  }
+  .shopBtn,
+  .reset,
+  .histMore {
+    min-height: 46px;
+  }
+
+  /* el beat del centro: acá se decide, así que es lo que menos puede achicarse */
+  .beat.event {
+    padding: 16px 14px 18px;
+  }
+  .beat.event h3 {
+    font-size: clamp(26px, 8vw, 36px);
+    margin-top: 8px;
+  }
+  .beat.event .body {
+    font-size: 14.5px;
+    margin-top: 10px;
+  }
+  .options {
+    margin-top: 14px;
+  }
+  .options button {
+    grid-template-columns: 18px minmax(0, 1fr) 12px;
+    gap: 9px;
+    min-height: 52px;
+    padding: 11px 12px;
+    font-size: 14px;
+  }
+  .options b {
+    font-size: 16px;
+  }
+  .fx {
+    font-size: 10.5px;
+  }
+
+  /* el cartel de la pelea: los dos nombres en fila no entran nunca, van apilados */
+  .beat.bout {
+    padding: 18px 14px 20px;
+  }
+  .beat.bout .names {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    margin-top: 16px;
+  }
+  .beat.bout .me,
+  .beat.bout .opp {
+    text-align: center;
+    font-size: clamp(24px, 9vw, 40px);
+  }
+  .beat.bout .vs {
+    font-size: 15px;
+  }
+  .boutMeta {
+    margin-top: 14px;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+  }
+  .stakes {
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .stake {
+    font-size: 11px;
+    padding: 4px 9px;
+  }
+  .enter {
+    margin-top: 16px;
+    min-height: 54px;
+    font-size: 23px;
+  }
+
+  /* historial: el renglón del resultado en dos filas, sin recortar el método */
+  .beat.result {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 3px 10px;
+    padding: 9px 0;
+  }
+  .beat.result .chip {
+    grid-row: span 2;
+    align-self: center;
+    font-size: 14px;
+  }
+  .beat.result .oppName {
+    font-size: 13.5px;
+  }
+  .beat.result .resMeta {
+    white-space: normal;
+    font-size: 10.5px;
+  }
+  .beat.past {
+    padding-left: 11px;
+  }
+
+  /* la jaula */
+  .fightOverlay {
+    padding: max(6px, var(--safeL)) max(6px, var(--safeR)) max(6px, var(--safeB)) max(6px, var(--safeL));
+  }
+  .fightHead {
+    padding: 12px 13px;
+  }
+  .fhMeta {
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+  }
+  .corners {
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .corners .vs {
+    font-size: 14px;
+    padding-top: 3px;
+  }
+  .cname {
+    font-size: 20px;
+  }
+  .downs {
+    margin-left: 5px;
+    font-size: 9px;
+  }
+  .corner .bar.hp {
+    height: 9px;
+    margin-top: 6px;
+  }
+  /* sin el min-height la lista de rounds empujaba la esquina fuera de la caja:
+     los botones del round quedaban recortados y la pelea se trababa ahí. */
+  .rounds {
+    min-height: 0;
+    padding: 12px 13px;
+    gap: 10px;
+  }
+  .rounds li {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 9px;
+  }
+  .rounds b {
+    font-size: 22px;
+  }
+  .rounds span {
+    font-size: 13.5px;
+    padding-left: 10px;
+    line-height: 1.45;
+  }
+  .cornerCall,
+  .verdict {
+    max-height: 76vh;
+    max-height: 76dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .cornerCall {
+    padding: 10px 12px 12px;
+  }
+  /* el aviso de la esquina baja a su propio renglón: en una fila se partía en tres */
+  .callHead {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-bottom: 8px;
+    font-size: 10px;
+  }
+  .callHead b {
+    order: 1;
+    font-size: 18px;
+  }
+  .callHead .autoBtn {
+    order: 2;
+    margin-left: auto;
+  }
+  .callHead span {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  .autoBtn {
+    min-height: 32px;
+    padding: 5px 10px;
+  }
+  .verdict {
+    padding: 14px 13px 16px;
+  }
+  .verdict strong {
+    font-size: 40px;
+  }
+  .verdict .consequences p {
+    font-size: 12.5px;
+  }
+  .verdict > button {
+    min-height: 50px;
+    font-size: 21px;
+  }
+
+  /* tienda */
+  /* título en un renglón, plata y cerrar en el de abajo: los tres juntos no entran */
+  .shopHead {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: 14px 13px 12px;
+  }
+  .shopHead > div {
+    flex: 1 1 100%;
+  }
+  .shopHead h3 {
+    font-size: 24px;
+    margin-top: 4px;
+  }
+  .shopCash {
+    margin-left: 0;
+    font-size: 26px;
+  }
+  .shopHead .autoBtn {
+    margin-left: auto;
+    min-height: 36px;
+  }
+  .shopBox > .hint {
+    padding: 10px 13px 0;
+  }
+  .shopNote {
+    padding: 10px 13px;
+  }
+  .shopBody {
+    padding: 14px 13px 18px;
+  }
+  .shopBox .options button {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+
+  /* card final */
+  .end {
+    padding-top: 20px;
+  }
+  .cardLeft,
+  .cardRight {
+    padding: 20px 16px 24px;
+  }
+  .end h1 {
+    font-size: clamp(38px, 12vw, 64px);
+  }
+  .end .fnick {
+    font-size: 24px;
+  }
+  .bigRecord b {
+    font-size: clamp(50px, 16vw, 78px);
+  }
+  .cardLeft .tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cardLeft .tile b {
+    font-size: 24px;
+  }
+  .endActions button {
+    min-height: 50px;
+    font-size: 17px;
+  }
+  .share {
+    padding: 12px 13px;
+    font-size: 11.5px;
+  }
+  .siteFoot {
+    padding-top: 14px;
+    font-size: 9px;
+    gap: 12px;
+  }
+}
+
+/* Teléfono acostado: la jaula tiene que entrar en 350 px de alto igual. */
+@media (max-height: 560px) {
+  .fightOverlay {
+    padding: max(4px, var(--safeL)) max(4px, var(--safeR)) max(4px, var(--safeB)) max(4px, var(--safeL));
+  }
+  .fightHead {
+    padding: 10px 14px;
+  }
+  .corners {
+    margin-top: 8px;
+  }
+  .cname {
+    font-size: 19px;
+  }
+  .rounds {
+    min-height: 0;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .cornerCall,
+  .verdict {
+    max-height: 82vh;
+    max-height: 82dvh;
+    overflow-y: auto;
+  }
+  .cornerCall {
+    padding: 8px 14px 10px;
+  }
+  .verdict strong {
+    font-size: 34px;
+  }
+}
+
+/* Acostado sobra ancho y falta alto: los cuatro planes van en dos filas de dos. */
+@media (max-height: 560px) and (min-width: 480px) {
+  .options.plans {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Sin mouse no hay hover: el feedback del toque lo da :active. */
+@media (hover: none) {
+  .list .row:active,
+  .cell:active,
+  .strip button:active,
+  .options button:not(:disabled):active {
+    background: #1c2027;
+  }
+}
+
+/* Abajo de 375 px la semilla y el botón ya no comparten renglón: cada uno el suyo. */
+@media (max-width: 374px) {
+  .field.seed {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .go {
+    flex: 1 1 100%;
+    justify-content: center;
+    font-size: 19px;
+  }
+  /* con la condensada ausente el rótulo se parte en dos: el chevrón sobra */
+  .go .chev {
+    display: none;
+  }
+  .beat.result {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .stat {
+    grid-template-columns: 52px minmax(0, 1fr) 22px;
   }
 }
